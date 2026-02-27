@@ -17,6 +17,7 @@ class TransactionRequest(BaseModel):
     merchant_id: str = Field(..., description="Target merchant identifier")
     device_id: str = Field(..., description="Device fingerprint used for the transaction")
     ip_address: str = Field(..., description="IP address of the request origin")
+    country: str = Field(..., min_length=2, max_length=2, description="ISO 3166-1 alpha-2 country code")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
     model_config = {
@@ -28,6 +29,7 @@ class TransactionRequest(BaseModel):
                 "merchant_id": "merchant_7",
                 "device_id": "device_abc123",
                 "ip_address": "192.168.1.10",
+                "country": "US",
                 "timestamp": "2026-02-27T10:00:00Z",
             }
         }

@@ -21,6 +21,7 @@ async def test_analyze_transaction_returns_decision():
         "merchant_id": "merchant_1",
         "device_id": "device_xyz",
         "ip_address": "10.0.0.1",
+        "country": "US",
     }
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/v1/transactions/analyze", json=payload)
