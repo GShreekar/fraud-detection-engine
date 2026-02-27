@@ -256,16 +256,23 @@ Each unique node label should have a uniqueness constraint on its primary proper
 
 All variables are loaded from `.env` by `app/config.py`. The `.env.example` file is the canonical template.
 
-| Variable                      | Type    | Default                     | Required | Description                                            |
-|-------------------------------|---------|-----------------------------|----------|--------------------------------------------------------|
-| `APP_ENV`                     | string  | `development`               | No       | Deployment environment tag                            |
-| `REDIS_HOST`                  | string  | `localhost`                 | Yes      | Redis hostname                                         |
-| `REDIS_PORT`                  | integer | `6379`                      | Yes      | Redis port                                             |
-| `NEO4J_URI`                   | string  | `bolt://localhost:7687`     | Yes      | Neo4j Bolt connection URI                             |
-| `NEO4J_USER`                  | string  | `neo4j`                     | Yes      | Neo4j username                                         |
-| `NEO4J_PASSWORD`              | string  | `password`                  | Yes      | Neo4j password (use a secrets manager in production)  |
-| `VELOCITY_WINDOW_SECONDS`     | integer | `60`                        | No       | Sliding window duration for velocity checks            |
-| `VELOCITY_MAX_TRANSACTIONS`   | integer | `10`                        | No       | Transaction count threshold that triggers velocity score |
+| Variable                        | Type    | Default                              | Required | Description                                                          |
+|---------------------------------|---------|--------------------------------------|----------|----------------------------------------------------------------------|
+| `APP_ENV`                       | string  | `development`                        | No       | Deployment environment tag                                           |
+| `REDIS_HOST`                    | string  | `localhost`                          | Yes      | Redis hostname                                                       |
+| `REDIS_PORT`                    | integer | `6379`                               | Yes      | Redis port                                                           |
+| `NEO4J_URI`                     | string  | `bolt://localhost:7687`              | Yes      | Neo4j Bolt connection URI                                            |
+| `NEO4J_USER`                    | string  | `neo4j`                              | Yes      | Neo4j username                                                       |
+| `NEO4J_PASSWORD`                | string  | `password`                           | Yes      | Neo4j password (use a secrets manager in production)                 |
+| `VELOCITY_WINDOW_SECONDS`       | integer | `60`                                 | No       | Sliding window duration for velocity checks                          |
+| `VELOCITY_MAX_TRANSACTIONS`     | integer | `10`                                 | No       | Transaction count threshold that triggers velocity score             |
+| `HIGH_AMOUNT_THRESHOLD`         | float   | `1000.0`                             | No       | USD amount above which the high-amount rule fires (RulesService)     |
+| `HIGH_RISK_COUNTRIES`           | list    | `["NG","GH","KP","IR","SY","YE","SO","MM"]` | No  | ISO 3166-1 alpha-2 codes treated as high-risk (RulesService)    |
+| `GRAPH_SHARED_DEVICE_THRESHOLD` | integer | `2`                                  | No       | Min distinct users on a device before graph scoring begins           |
+| `GRAPH_IP_CLUSTER_THRESHOLD`    | integer | `3`                                  | No       | Min distinct users on an IP before graph scoring begins              |
+| `WEIGHT_RULES`                  | float   | `0.30`                               | No       | FraudEngine weight for RulesService score contribution               |
+| `WEIGHT_VELOCITY`               | float   | `0.35`                               | No       | FraudEngine weight for VelocityService score contribution            |
+| `WEIGHT_GRAPH`                  | float   | `0.35`                               | No       | FraudEngine weight for GraphService score contribution               |
 
 **Rules for adding new variables:**
 1. Add the field with a default to `Settings` in `app/config.py`.
@@ -279,20 +286,20 @@ All variables are loaded from `.env` by `app/config.py`. The `.env.example` file
 
 The `FraudEngine` combines partial scores from all three services using configurable weights.
 
-| Service            | Config Variable         | Default Weight | Notes                                        |
-|--------------------|-------------------------|----------------|----------------------------------------------|
-| `RulesService`     | `RULES_WEIGHT`          | `0.30`         | Fast but simple signals                      |
-| `VelocityService`  | `VELOCITY_WEIGHT`       | `0.35`         | Strong behavioral signal                     |
-| `GraphService`     | `GRAPH_WEIGHT`          | `0.35`         | Strongest structural signal                  |
+| Service            | Config Variable    | Default Weight | Notes                           |
+|--------------------|--------------------|----------------|---------------------------------|
+| `RulesService`     | `WEIGHT_RULES`     | `0.30`         | Fast but simple signals         |
+| `VelocityService`  | `WEIGHT_VELOCITY`  | `0.35`         | Strong behavioral signal        |
+| `GraphService`     | `WEIGHT_GRAPH`     | `0.35`         | Strongest structural signal     |
 
 **Invariant:** `RULES_WEIGHT + VELOCITY_WEIGHT + GRAPH_WEIGHT` must always equal `1.0`. This is validated at startup.
 
 **Aggregation:**
 ```
 fraud_score = min(
-    (rules_score   × RULES_WEIGHT)    +
-    (velocity_score × VELOCITY_WEIGHT) +
-    (graph_score   × GRAPH_WEIGHT),
+    (rules_score    × WEIGHT_RULES)    +
+    (velocity_score × WEIGHT_VELOCITY) +
+    (graph_score    × WEIGHT_GRAPH),
     1.0
 )
 ```
