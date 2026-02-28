@@ -66,22 +66,22 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ### Tasks
 
-- [ ] **Define the rule set** — the three rules to implement:
-  - [ ] High-amount transaction (amount > $1,000)
-  - [ ] Transaction originates from a high-risk country (configurable list in `config.py`)
-  - [ ] Suspiciously round/clean amount (e.g., exactly $1,000.00, $500.00)
-- [ ] **Define score contributions per rule** — assign each rule a fixed score contribution value. These values should be documented in a constants section at the top of `rules.py`, not scattered inline.
-- [ ] **Implement each rule as a private method** — each method should accept the `TransactionRequest` and return a `(score: float, reason: str | None)` tuple. If the rule is not triggered, it returns `(0.0, None)`.
-- [ ] **Implement the public `evaluate()` method** — iterates all rule methods, collects non-zero contributions, and returns the aggregated `(total_score, reasons_list)`.
-- [ ] **Cap the rules score at 1.0** — no single service should return a score greater than 1.0.
-- [ ] **Write unit tests for `RulesService`** — test each rule in isolation with both triggering and non-triggering input.
+- [x] **Define the rule set** — the three rules to implement:
+  - [x] High-amount transaction (amount > $1,000)
+  - [x] Transaction originates from a high-risk country (configurable list in `config.py`)
+  - [x] Suspiciously round/clean amount (e.g., exactly $1,000.00, $500.00)
+- [x] **Define score contributions per rule** — assign each rule a fixed score contribution value. These values should be documented in a constants section at the top of `rules.py`, not scattered inline.
+- [x] **Implement each rule as a private method** — each method should accept the `TransactionRequest` and return a `(score: float, reason: str | None)` tuple. If the rule is not triggered, it returns `(0.0, None)`.
+- [x] **Implement the public `evaluate()` method** — iterates all rule methods, collects non-zero contributions, and returns the aggregated `(total_score, reasons_list)`.
+- [x] **Cap the rules score at 1.0** — no single service should return a score greater than 1.0.
+- [x] **Write unit tests for `RulesService`** — test each rule in isolation with both triggering and non-triggering input.
 
 ### Acceptance Criteria
 
-- [ ] Each rule method has a unit test for the triggered and non-triggered case
-- [ ] `evaluate()` returns `(0.0, [])` for a completely clean transaction
-- [ ] `evaluate()` returns the correct score and reasons for a transaction that triggers multiple rules
-- [ ] No external I/O is performed (no Redis, no Neo4j, no HTTP calls)
+- [x] Each rule method has a unit test for the triggered and non-triggered case
+- [x] `evaluate()` returns `(0.0, [])` for a completely clean transaction
+- [x] `evaluate()` returns the correct score and reasons for a transaction that triggers multiple rules
+- [x] No external I/O is performed (no Redis, no Neo4j, no HTTP calls)
 
 ---
 
