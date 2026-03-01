@@ -1,23 +1,43 @@
 """
-Neo4j client — connection setup for graph-based fraud pattern detection.
+Neo4j client — async connection setup for graph-based fraud pattern detection.
 
-TODO: initialize Neo4j async driver using config settings.
+Provides connect_neo4j(), close_neo4j(), and get_driver() for use
+as a FastAPI lifespan hook and dependency.
 """
 
-# TODO: from neo4j import AsyncGraphDatabase
-# TODO: from app.config import settings
+import logging
 
-# driver = None
+from neo4j import AsyncGraphDatabase
 
-# def get_driver():
-#     global driver
-#     if driver is None:
-#         driver = AsyncGraphDatabase.driver(
-#             settings.NEO4J_URI,
-#             auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
-#         )
-#     return driver
+from app.config import settings
 
-# async def close_driver():
-#     if driver:
-#         await driver.close()
+logger = logging.getLogger(__name__)
+
+_driver = None
+
+
+def connect_neo4j() -> None:
+    """Create the global async Neo4j driver (called at startup)."""
+    global _driver
+    _driver = AsyncGraphDatabase.driver(
+        settings.NEO4J_URI,
+        auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
+    )
+    logger.info(
+        "neo4j_connected",
+        extra={"uri": settings.NEO4J_URI},
+    )
+
+
+async def close_neo4j() -> None:
+    """Close the global async Neo4j driver (called at shutdown)."""
+    global _driver
+    if _driver is not None:
+        await _driver.close()
+        _driver = None
+        logger.info("neo4j_disconnected")
+
+
+def get_driver():
+    """Return the current Neo4j async driver instance."""
+    return _driver

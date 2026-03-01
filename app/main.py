@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.db.neo4j_client import close_neo4j, connect_neo4j
 from app.db.redis_client import close_redis, connect_redis
 from app.routes import transaction
 
@@ -10,8 +11,10 @@ from app.routes import transaction
 async def lifespan(app: FastAPI):
     """Startup and shutdown hooks for external connections."""
     await connect_redis()
+    connect_neo4j()
     yield
     await close_redis()
+    await close_neo4j()
 
 
 app = FastAPI(

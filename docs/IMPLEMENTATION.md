@@ -91,28 +91,28 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ### Tasks
 
-- [ ] **Implement the Redis client** (`app/db/redis_client.py`)
-  - [ ] Initialize an async Redis connection using `redis.asyncio`
-  - [ ] Expose a `get_redis()` dependency function
-  - [ ] Connect on app startup, disconnect on app shutdown (register in `main.py` lifespan)
-- [ ] **Define the two velocity dimensions** — user and IP address. Each maps to a Redis sorted set with its own key pattern (documented in `DATA_MODEL.md`).
-- [ ] **Implement the sliding window check for each dimension:**
-  - [ ] Add the current transaction to the sorted set (`ZADD`)
-  - [ ] Remove entries older than the window (`ZREMRANGEBYSCORE`)
-  - [ ] Count entries within the window (`ZCOUNT`)
-  - [ ] Set a TTL on the key equal to the window size
-  - [ ] If count exceeds the threshold, return a score contribution and reason
-- [ ] **Implement the public `evaluate()` method** — runs both dimension checks and returns the aggregated `(total_score, reasons_list)`.
-- [ ] **Make window size and threshold configurable** — read from `Settings`, not hardcoded.
-- [ ] **Write integration tests for `VelocityService`** — use a test Redis instance (via Docker in CI) or mock the Redis client with `fakeredis`.
+- [x] **Implement the Redis client** (`app/db/redis_client.py`)
+  - [x] Initialize an async Redis connection using `redis.asyncio`
+  - [x] Expose a `get_redis()` dependency function
+  - [x] Connect on app startup, disconnect on app shutdown (register in `main.py` lifespan)
+- [x] **Define the two velocity dimensions** — user and IP address. Each maps to a Redis sorted set with its own key pattern (documented in `DATA_MODEL.md`).
+- [x] **Implement the sliding window check for each dimension:**
+  - [x] Add the current transaction to the sorted set (`ZADD`)
+  - [x] Remove entries older than the window (`ZREMRANGEBYSCORE`)
+  - [x] Count entries within the window (`ZCOUNT`)
+  - [x] Set a TTL on the key equal to the window size
+  - [x] If count exceeds the threshold, return a score contribution and reason
+- [x] **Implement the public `evaluate()` method** — runs both dimension checks and returns the aggregated `(total_score, reasons_list)`.
+- [x] **Make window size and threshold configurable** — read from `Settings`, not hardcoded.
+- [x] **Write integration tests for `VelocityService`** — use a test Redis instance (via Docker in CI) or mock the Redis client with `fakeredis`.
 
 ### Acceptance Criteria
 
-- [ ] Velocity checks correctly detect a burst of transactions within the window
-- [ ] A single transaction does not trigger the velocity check
-- [ ] Transactions older than the window are not counted
-- [ ] The Redis key expires automatically after the window elapses
-- [ ] Service returns `(0.0, [])` gracefully if Redis is unreachable (fail-safe)
+- [x] Velocity checks correctly detect a burst of transactions within the window
+- [x] A single transaction does not trigger the velocity check
+- [x] Transactions older than the window are not counted
+- [x] The Redis key expires automatically after the window elapses
+- [x] Service returns `(0.0, [])` gracefully if Redis is unreachable (fail-safe)
 
 ---
 
@@ -122,31 +122,31 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ### Tasks
 
-- [ ] **Implement the Neo4j client** (`app/db/neo4j_client.py`)
-  - [ ] Initialize an async Neo4j driver using `neo4j.AsyncGraphDatabase`
-  - [ ] Expose a `get_driver()` function
-  - [ ] Connect on app startup, disconnect on shutdown (register in `main.py` lifespan)
-- [ ] **Implement the write phase** — on each transaction, use MERGE Cypher statements to upsert:
-  - [ ] `User` node
-  - [ ] `Device` node
-  - [ ] `IPAddress` node
-  - [ ] `Transaction` node
-  - [ ] Three relationship edges (`PERFORMED`, `USED_DEVICE`, `ORIGINATED_FROM`)
-  - [ ] All writes must be idempotent — running the same transaction twice should not create duplicate nodes.
-- [ ] **Implement the two fraud pattern queries** — after writing, query for:
-  - [ ] **Shared device:** count how many distinct users have used this device
-  - [ ] **IP cluster:** count how many distinct users have transacted from this IP
-- [ ] **Define score contributions per pattern** — proportional to the number of suspicious connections (e.g., device shared by 3 users = low score; shared by 10 users = high score).
-- [ ] **Implement the public `evaluate()` method** — writes the transaction, runs all pattern queries, returns `(total_score, reasons_list)`.
-- [ ] **Seed data for testing** — create a test fixture that pre-loads the Neo4j graph with known fraud rings so that test queries return predictable results.
-- [ ] **Write integration tests for `GraphService`** — use a test Neo4j instance (via Docker in CI).
+- [x] **Implement the Neo4j client** (`app/db/neo4j_client.py`)
+  - [x] Initialize an async Neo4j driver using `neo4j.AsyncGraphDatabase`
+  - [x] Expose a `get_driver()` function
+  - [x] Connect on app startup, disconnect on shutdown (register in `main.py` lifespan)
+- [x] **Implement the write phase** — on each transaction, use MERGE Cypher statements to upsert:
+  - [x] `User` node
+  - [x] `Device` node
+  - [x] `IPAddress` node
+  - [x] `Transaction` node
+  - [x] Three relationship edges (`PERFORMED`, `USED_DEVICE`, `ORIGINATED_FROM`)
+  - [x] All writes must be idempotent — running the same transaction twice should not create duplicate nodes.
+- [x] **Implement the two fraud pattern queries** — after writing, query for:
+  - [x] **Shared device:** count how many distinct users have used this device
+  - [x] **IP cluster:** count how many distinct users have transacted from this IP
+- [x] **Define score contributions per pattern** — proportional to the number of suspicious connections (e.g., device shared by 3 users = low score; shared by 10 users = high score).
+- [x] **Implement the public `evaluate()` method** — writes the transaction, runs all pattern queries, returns `(total_score, reasons_list)`.
+- [x] **Seed data for testing** — create a test fixture that pre-loads the Neo4j graph with known fraud rings so that test queries return predictable results.
+- [x] **Write integration tests for `GraphService`** — use a test Neo4j instance (via Docker in CI).
 
 ### Acceptance Criteria
 
-- [ ] MERGE operations are idempotent — no duplicate nodes or relationships on replay
-- [ ] All three node types (`User`, `Device`, `IPAddress`, `Transaction`) and relationships are created correctly
-- [ ] Shared device query correctly scores a device used by multiple users
-- [ ] Service returns `(0.0, [])` gracefully if Neo4j is unreachable (fail-safe)
+- [x] MERGE operations are idempotent — no duplicate nodes or relationships on replay
+- [x] All three node types (`User`, `Device`, `IPAddress`, `Transaction`) and relationships are created correctly
+- [x] Shared device query correctly scores a device used by multiple users
+- [x] Service returns `(0.0, [])` gracefully if Neo4j is unreachable (fail-safe)
 
 ---
 
