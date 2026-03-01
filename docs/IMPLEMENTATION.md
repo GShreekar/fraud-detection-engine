@@ -156,11 +156,11 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ### Tasks
 
-- [ ] **Inject services into `FraudEngine`** — `FraudEngine.__init__` should receive instances of `RulesService`, `VelocityService`, and `GraphService` as constructor arguments (constructor injection for testability).
-- [ ] **Implement weighted aggregation** — collect partial scores from all three services and combine using configurable weights (read from `Settings`).
-- [ ] **Implement score capping** — ensure the aggregated score never exceeds `1.0`.
-- [ ] **Implement `_decide()`** — the existing stub is correct; verify thresholds match the documented values.
-- [ ] **Construct `FraudEngine` in the route** — instantiate `FraudEngine` with real service instances. Consider using FastAPI dependency injection for cleaner testability.
+- [x] **Inject services into `FraudEngine`** — `FraudEngine.__init__` should receive instances of `RulesService`, `VelocityService`, and `GraphService` as constructor arguments (constructor injection for testability).
+- [x] **Implement weighted aggregation** — collect partial scores from all three services and combine using configurable weights (read from `Settings`).
+- [x] **Implement score capping** — ensure the aggregated score never exceeds `1.0`.
+- [x] **Implement `_decide()`** — the existing stub is correct; verify thresholds match the documented values.
+- [x] **Construct `FraudEngine` in the route** — instantiate `FraudEngine` with real service instances. Consider using FastAPI dependency injection for cleaner testability.
 - [ ] **End-to-end manual test** — start the full Docker stack and submit transactions via Swagger UI or `curl`. Verify:
   - [ ] A clean transaction returns `ALLOW`
   - [ ] A transaction with a very high amount returns a non-zero score
@@ -169,10 +169,10 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ### Acceptance Criteria
 
-- [ ] `FraudEngine` correctly aggregates scores from all three services
-- [ ] Weights sum to 1.0
-- [ ] All reasons from all services are merged into a single list in the response
-- [ ] End-to-end request returns a non-stub, data-driven fraud score
+- [x] `FraudEngine` correctly aggregates scores from all three services
+- [x] Weights sum to 1.0
+- [x] All reasons from all services are merged into a single list in the response
+- [x] End-to-end request returns a non-stub, data-driven fraud score
 
 ---
 
