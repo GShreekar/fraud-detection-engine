@@ -5,8 +5,12 @@ Coordinates rule checks, velocity checks, and graph checks,
 then aggregates scores into a final FraudScoreResponse.
 """
 
+import logging
+
 from app.config import settings
 from app.models.transaction import FraudDecision, FraudScoreResponse, TransactionRequest
+
+logger = logging.getLogger(__name__)
 from app.services.graph import GraphService
 from app.services.rules import RulesService
 from app.services.velocity import VelocityService
@@ -63,6 +67,16 @@ class FraudEngine:
         reasons: list[str] = rules_reasons + velocity_reasons + graph_reasons
 
         decision = self._decide(fraud_score)
+
+        logger.info(
+            "transaction_scored",
+            extra={
+                "transaction_id": transaction.transaction_id,
+                "fraud_score": round(fraud_score, 4),
+                "decision": decision.value,
+                "reasons": reasons,
+            },
+        )
 
         return FraudScoreResponse(
             transaction_id=transaction.transaction_id,
