@@ -182,19 +182,19 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ### Tasks
 
-- [ ] **Wrap Redis calls in try/except** in `VelocityService` — if Redis is unreachable, log a warning and return `(0.0, [])`. Add a reason like `"velocity_check_unavailable"` to inform the caller.
-- [ ] **Wrap Neo4j calls in try/except** in `GraphService` — same pattern: log, return neutral score, add informational reason.
-- [ ] **Add structured logging** — use Python's `logging` module (or `structlog`) to emit JSON-structured log lines. Every request should log: `transaction_id`, `fraud_score`, `decision`, and service-level errors.
-- [ ] **Add global FastAPI exception handler** — catch unhandled exceptions and return a consistent `{"error": "internal_server_error"}` JSON response rather than a 500 HTML page.
-- [ ] **Add request ID to logs** — generate a UUID per request and attach it to all log lines for that request (use FastAPI middleware).
-- [ ] **Test failure modes** — write tests that simulate Redis being down and Neo4j being down, asserting that the API still returns a valid (degraded) response.
+- [x] **Wrap Redis calls in try/except** in `VelocityService` — if Redis is unreachable, log a warning and return `(0.0, [])`. Add a reason like `"velocity_check_unavailable"` to inform the caller.
+- [x] **Wrap Neo4j calls in try/except** in `GraphService` — same pattern: log, return neutral score, add informational reason.
+- [x] **Add structured logging** — use Python's `logging` module (or `structlog`) to emit JSON-structured log lines. Every request should log: `transaction_id`, `fraud_score`, `decision`, and service-level errors.
+- [x] **Add global FastAPI exception handler** — catch unhandled exceptions and return a consistent `{"error": "internal_server_error"}` JSON response rather than a 500 HTML page.
+- [x] **Add request ID to logs** — generate a UUID per request and attach it to all log lines for that request (use FastAPI middleware).
+- [x] **Test failure modes** — write tests that simulate Redis being down and Neo4j being down, asserting that the API still returns a valid (degraded) response.
 
 ### Acceptance Criteria
 
-- [ ] API returns a valid `FraudScoreResponse` even when Redis is unreachable
-- [ ] API returns a valid `FraudScoreResponse` even when Neo4j is unreachable
-- [ ] All exceptions are logged with `transaction_id` and request context
-- [ ] No raw Python stack traces are returned to the caller
+- [x] API returns a valid `FraudScoreResponse` even when Redis is unreachable
+- [x] API returns a valid `FraudScoreResponse` even when Neo4j is unreachable
+- [x] All exceptions are logged with `transaction_id` and request context
+- [x] No raw Python stack traces are returned to the caller
 
 ---
 
