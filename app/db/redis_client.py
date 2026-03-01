@@ -1,16 +1,41 @@
 """
-Redis client — connection setup for velocity checks and caching.
+Redis client — async connection setup for velocity checks.
 
-TODO: initialize async Redis connection using config settings.
+Provides connect_redis(), close_redis(), and get_redis() for use
+as a FastAPI lifespan hook and dependency.
 """
 
-# TODO: from redis.asyncio import Redis
-# TODO: from app.config import settings
+import logging
 
-# redis_client: Redis | None = None
+from redis.asyncio import Redis
 
-# async def get_redis() -> Redis:
-#     global redis_client
-#     if redis_client is None:
-#         redis_client = Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT)
-#     return redis_client
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+redis_client: Redis | None = None
+
+
+async def connect_redis() -> None:
+    """Create the global async Redis connection (called at startup)."""
+    global redis_client
+    redis_client = Redis(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        decode_responses=True,
+    )
+    logger.info("redis_connected", extra={"host": settings.REDIS_HOST, "port": settings.REDIS_PORT})
+
+
+async def close_redis() -> None:
+    """Close the global async Redis connection (called at shutdown)."""
+    global redis_client
+    if redis_client is not None:
+        await redis_client.close()
+        redis_client = None
+        logger.info("redis_disconnected")
+
+
+def get_redis() -> Redis | None:
+    """Return the current Redis client instance."""
+    return redis_client
