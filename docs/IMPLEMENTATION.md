@@ -239,19 +239,19 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ### Tasks
 
-- [ ] **Validate Dockerfile** — build the image locally and confirm it starts cleanly.
-- [ ] **Validate `docker-compose.yml`** — bring up all three services and confirm they can communicate.
-- [ ] **Health check endpoints in Compose** — add `healthcheck` directives to Redis and Neo4j services so the API service waits for them to be ready before starting.
-- [ ] **Add `depends_on` with condition** — use `service_healthy` condition to prevent the API from starting before its dependencies are ready.
-- [ ] **Verify end-to-end with Docker** — submit a transaction to the Dockerized API and confirm scores are non-stub.
-- [ ] **Add a `.dockerignore` file** — exclude `.git`, `__pycache__`, `.env`, `tests/`, and `docs/` from the build context.
+- [x] **Validate Dockerfile** — build the image locally and confirm it starts cleanly.
+- [x] **Validate `docker-compose.yml`** — bring up all three services and confirm they can communicate.
+- [x] **Health check endpoints in Compose** — add `healthcheck` directives to Redis and Neo4j services so the API service waits for them to be ready before starting.
+- [x] **Add `depends_on` with condition** — use `service_healthy` condition to prevent the API from starting before its dependencies are ready.
+- [x] **Verify end-to-end with Docker** — submit a transaction to the Dockerized API and confirm scores are non-stub.
+- [x] **Add a `.dockerignore` file** — exclude `.git`, `__pycache__`, `.env`, `tests/`, and `docs/` from the build context.
 
 ### Acceptance Criteria
 
-- [ ] `docker compose -f docker/docker-compose.yml up --build` starts all services without errors
-- [ ] The API is reachable at `http://localhost:8000`
-- [ ] Redis and Neo4j are accessible within the Docker network
-- [ ] Image build time is under 60 seconds on a warm cache
+- [x] `docker compose -f docker/docker-compose.yml up --build` starts all services without errors
+- [x] The API is reachable at `http://localhost:8000`
+- [x] Redis and Neo4j are accessible within the Docker network
+- [x] Image build time is under 60 seconds on a warm cache
 
 ---
 
