@@ -216,20 +216,20 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ### Tasks
 
-- [ ] **Unit tests** — `RulesService` (each rule), `FraudEngine._decide()`, Pydantic model validation.
-- [ ] **Integration tests — Redis** — use `fakeredis` to test `VelocityService` sliding window logic.
-- [ ] **Integration tests — Neo4j** — use a real Neo4j test container to test `GraphService` write and query logic.
-- [ ] **API tests** — use `httpx.AsyncClient` with `ASGITransport` to test full request-response cycles against all scenarios.
-- [ ] **Negative tests** — invalid payloads, missing fields, boundary values for amounts.
-- [ ] **Failure mode tests** — service unavailability (mocked), score boundary cases (exactly 0.40, exactly 0.75).
-- [ ] **Configure `pytest-asyncio`** — ensure all async tests run correctly with `asyncio_mode = "auto"` in `pytest.ini`.
+- [x] **Unit tests** — `RulesService` (each rule), `FraudEngine._decide()`, Pydantic model validation.
+- [x] **Integration tests — Redis** — use `fakeredis` to test `VelocityService` sliding window logic.
+- [x] **Integration tests — Neo4j** — use a real Neo4j test container to test `GraphService` write and query logic.
+- [x] **API tests** — use `httpx.AsyncClient` with `ASGITransport` to test full request-response cycles against all scenarios.
+- [x] **Negative tests** — invalid payloads, missing fields, boundary values for amounts.
+- [x] **Failure mode tests** — service unavailability (mocked), score boundary cases (exactly 0.40, exactly 0.75).
+- [x] **Configure `pytest-asyncio`** — ensure all async tests run correctly with `asyncio_mode = "auto"` in `pytest.ini`.
 
 ### Acceptance Criteria
 
-- [ ] All tests pass in a clean environment with `pytest tests/ -v`
-- [ ] Each service has at least one test for every triggering and non-triggering scenario
-- [ ] API tests cover: valid transaction, invalid payload (422), health check
-- [ ] Test suite runs in under 60 seconds
+- [x] All tests pass in a clean environment with `pytest tests/ -v`
+- [x] Each service has at least one test for every triggering and non-triggering scenario
+- [x] API tests cover: valid transaction, invalid payload (422), health check
+- [x] Test suite runs in under 60 seconds
 
 ---
 
