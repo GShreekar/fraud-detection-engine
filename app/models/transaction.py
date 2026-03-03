@@ -19,6 +19,9 @@ class TransactionRequest(BaseModel):
     ip_address: str = Field(..., description="IP address of the request origin")
     country: str = Field(..., min_length=2, max_length=2, description="ISO 3166-1 alpha-2 country code")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    account_age_days: int | None = Field(default=None, description="Age of user account in days")
+    merchant_category: str | None = Field(default=None, description="Merchant category code")
+    payment_method: str | None = Field(default=None, description="Payment method used")
 
     model_config = {
         "json_schema_extra": {
@@ -31,6 +34,9 @@ class TransactionRequest(BaseModel):
                 "ip_address": "192.168.1.10",
                 "country": "US",
                 "timestamp": "2026-02-27T10:00:00Z",
+                "account_age_days": 30,
+                "merchant_category": "electronics",
+                "payment_method": "credit_card",
             }
         }
     }

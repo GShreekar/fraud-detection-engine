@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     HIGH_AMOUNT_THRESHOLD: float = 1000.0
     # ISO 3166-1 alpha-2 country codes considered high-risk
     HIGH_RISK_COUNTRIES: list[str] = ["NG", "GH", "KP", "IR", "SY", "YE", "SO", "MM"]
+    # Accounts younger than this many days are considered new (higher risk)
+    RULE_NEW_ACCOUNT_DAYS: int = 30
+    # Merchant categories considered high-risk for fraud
+    HIGH_RISK_MERCHANTS: list[str] = ["crypto", "gambling", "gift_cards", "wire_transfer"]
 
     # --- GraphService (Phase 4) ---
     # Minimum number of distinct users on the same device before scoring begins

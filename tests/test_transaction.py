@@ -95,7 +95,7 @@ async def test_analyze_returns_valid_response_when_both_services_down():
     payload = {
         "transaction_id": "txn_both_down",
         "user_id": "user_1",
-        "amount": 1500.0,
+        "amount": 1500.50,
         "merchant_id": "merchant_1",
         "device_id": "device_xyz",
         "ip_address": "10.0.0.1",
@@ -278,7 +278,7 @@ async def test_analyze_clean_transaction_returns_allow():
     payload = {
         "transaction_id": "txn_clean",
         "user_id": "user_clean",
-        "amount": 50.0,
+        "amount": 50.50,
         "merchant_id": "merchant_1",
         "device_id": "device_clean",
         "ip_address": "10.0.0.1",
@@ -303,7 +303,7 @@ async def test_analyze_high_amount_transaction_returns_nonzero_score():
     payload = {
         "transaction_id": "txn_high_amt",
         "user_id": "user_1",
-        "amount": 5000.0,
+        "amount": 5000.50,
         "merchant_id": "merchant_1",
         "device_id": "device_xyz",
         "ip_address": "10.0.0.1",

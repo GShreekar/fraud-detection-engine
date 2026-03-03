@@ -45,6 +45,8 @@ class FraudEngine:
         - Graph score (Neo4j pattern detection)
 
         Weights are configured in Settings and must sum to 1.0.
+        When a service returns (0.0, []), its weight is redistributed
+        proportionally to services that produced a non-zero score.
         """
         # Collect scores from all three services
         rules_score, rules_reasons = self.rules_service.evaluate(transaction)
@@ -53,11 +55,9 @@ class FraudEngine:
         )
         graph_score, graph_reasons = await self.graph_service.evaluate(transaction)
 
-        # Apply weighted aggregation
-        fraud_score = (
-            rules_score * settings.WEIGHT_RULES
-            + velocity_score * settings.WEIGHT_VELOCITY
-            + graph_score * settings.WEIGHT_GRAPH
+        # Adaptive weighted aggregation — redistribute inactive weight
+        fraud_score = self._aggregate(
+            rules_score, velocity_score, graph_score,
         )
 
         # Ensure score does not exceed 1.0 (defensive cap)
@@ -83,6 +83,37 @@ class FraudEngine:
             fraud_score=fraud_score,
             decision=decision,
             reasons=reasons,
+        )
+
+    @staticmethod
+    def _aggregate(
+        rules_score: float,
+        velocity_score: float,
+        graph_score: float,
+    ) -> float:
+        """Compute weighted score, redistributing inactive service weight.
+
+        When velocity or graph return 0.0 (no data / service unavailable),
+        their configured weight is redistributed proportionally to the
+        services that did produce a non-zero score.  If every service
+        returns 0.0 the final score is 0.0.
+        """
+        service_weights: list[tuple[float, float]] = [
+            (rules_score, settings.WEIGHT_RULES),
+            (velocity_score, settings.WEIGHT_VELOCITY),
+            (graph_score, settings.WEIGHT_GRAPH),
+        ]
+
+        active_weight = sum(w for s, w in service_weights if s > 0.0)
+
+        if active_weight == 0.0:
+            return 0.0
+
+        # Scale each active service's weight so active weights sum to 1.0
+        return sum(
+            score * (weight / active_weight)
+            for score, weight in service_weights
+            if score > 0.0
         )
 
     @staticmethod
