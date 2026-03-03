@@ -18,6 +18,7 @@ HIGH_RISK_COUNTRY_SCORE = 0.4
 ROUND_AMOUNT_SCORE = 0.3
 NEW_ACCOUNT_SCORE = 0.25
 HIGH_RISK_MERCHANT_SCORE = 0.2
+INTERNATIONAL_TRANSACTION_SCORE = 0.15
 UNUSUAL_HOUR_SCORE = 0.15
 
 # --- Round amount detection ---
@@ -39,6 +40,7 @@ class RulesService:
             self._check_round_amount(transaction),
             self._check_new_account(transaction),
             self._check_high_risk_merchant(transaction),
+            self._check_international_transaction(transaction),
             self._check_unusual_hour(transaction),
         ]
 
@@ -96,6 +98,14 @@ class RulesService:
             and transaction.merchant_category.lower() in settings.HIGH_RISK_MERCHANTS
         ):
             return HIGH_RISK_MERCHANT_SCORE, "high_risk_merchant"
+        return 0.0, None
+
+    def _check_international_transaction(
+        self, transaction: TransactionRequest
+    ) -> tuple[float, str | None]:
+        """Flag cross-border transactions."""
+        if transaction.is_international is True:
+            return INTERNATIONAL_TRANSACTION_SCORE, "international_transaction"
         return 0.0, None
 
     def _check_unusual_hour(

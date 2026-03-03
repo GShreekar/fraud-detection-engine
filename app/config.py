@@ -24,11 +24,17 @@ class Settings(BaseSettings):
     # Transactions above this USD amount trigger the high-amount rule
     HIGH_AMOUNT_THRESHOLD: float = 1000.0
     # ISO 3166-1 alpha-2 country codes considered high-risk
-    HIGH_RISK_COUNTRIES: list[str] = ["NG", "GH", "KP", "IR", "SY", "YE", "SO", "MM"]
+    HIGH_RISK_COUNTRIES: list[str] = [
+        "NG", "GH", "KP", "IR", "SY", "YE", "SO", "MM",
+        "CN", "KE",
+    ]
     # Accounts younger than this many days are considered new (higher risk)
     RULE_NEW_ACCOUNT_DAYS: int = 30
     # Merchant categories considered high-risk for fraud
-    HIGH_RISK_MERCHANTS: list[str] = ["crypto", "gambling", "gift_cards", "wire_transfer"]
+    HIGH_RISK_MERCHANTS: list[str] = [
+        "crypto", "gambling", "gift_cards", "wire_transfer",
+        "crypto_exchange", "luxury_goods",
+    ]
 
     # --- GraphService (Phase 4) ---
     # Minimum number of distinct users on the same device before scoring begins
@@ -37,9 +43,9 @@ class Settings(BaseSettings):
     GRAPH_IP_CLUSTER_THRESHOLD: int = 3
 
     # --- FraudEngine score weights (Phase 5) — must sum to 1.0 ---
-    WEIGHT_RULES: float = 0.30
-    WEIGHT_VELOCITY: float = 0.35
-    WEIGHT_GRAPH: float = 0.35
+    WEIGHT_RULES: float = 0.50
+    WEIGHT_VELOCITY: float = 0.25
+    WEIGHT_GRAPH: float = 0.25
 
     model_config = SettingsConfigDict(env_file=".env")
 

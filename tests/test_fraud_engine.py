@@ -4,6 +4,7 @@ tests/test_fraud_engine.py — Unit tests for FraudEngine._decide() and _aggrega
 
 import pytest
 
+from app.config import settings
 from app.models.transaction import FraudDecision
 from app.services.fraud_engine import FraudEngine
 
@@ -57,23 +58,23 @@ def test_decide_returns_block_at_maximum_score() -> None:
 def test_aggregate_all_services_active() -> None:
     """When all services return non-zero, use standard weighted aggregation."""
     score = FraudEngine._aggregate(0.8, 0.5, 0.6)
-    # weights: 0.30, 0.35, 0.35 => 0.8*0.30 + 0.5*0.35 + 0.6*0.35
-    expected = 0.8 * 0.30 + 0.5 * 0.35 + 0.6 * 0.35
+    w_r, w_v, w_g = settings.WEIGHT_RULES, settings.WEIGHT_VELOCITY, settings.WEIGHT_GRAPH
+    expected = 0.8 * w_r + 0.5 * w_v + 0.6 * w_g
     assert score == pytest.approx(expected)
 
 
 def test_aggregate_only_rules_active() -> None:
-    """When velocity and graph return 0.0, only the rules weight contributes."""
+    """When velocity and graph return 0.0, rules gets full weight."""
     score = FraudEngine._aggregate(0.8, 0.0, 0.0)
-    # 0.8 * 0.30 = 0.24 — no weight redistribution
-    assert score == pytest.approx(0.8 * 0.30)
+    assert score == pytest.approx(0.8)
 
 
 def test_aggregate_rules_and_velocity_active() -> None:
-    """When graph returns 0.0, its weight is not redistributed."""
+    """When graph returns 0.0, its weight is redistributed."""
     score = FraudEngine._aggregate(0.8, 0.5, 0.0)
-    # 0.8 * 0.30 + 0.5 * 0.35 + 0.0 * 0.35 = 0.415
-    expected = 0.8 * 0.30 + 0.5 * 0.35
+    w_r, w_v = settings.WEIGHT_RULES, settings.WEIGHT_VELOCITY
+    active = w_r + w_v
+    expected = 0.8 * (w_r / active) + 0.5 * (w_v / active)
     assert score == pytest.approx(expected)
 
 
@@ -84,7 +85,6 @@ def test_aggregate_all_zero_returns_zero() -> None:
 
 
 def test_aggregate_only_graph_active() -> None:
-    """When only graph returns a score, only the graph weight contributes."""
+    """When only graph returns a score, it gets full weight."""
     score = FraudEngine._aggregate(0.0, 0.0, 0.7)
-    # 0.7 * 0.35 = 0.245 — no weight redistribution
-    assert score == pytest.approx(0.7 * 0.35)
+    assert score == pytest.approx(0.7)
