@@ -63,16 +63,17 @@ def test_aggregate_all_services_active() -> None:
 
 
 def test_aggregate_only_rules_active() -> None:
-    """When velocity and graph return 0.0, rules gets full weight."""
+    """When velocity and graph return 0.0, only the rules weight contributes."""
     score = FraudEngine._aggregate(0.8, 0.0, 0.0)
-    assert score == pytest.approx(0.8)
+    # 0.8 * 0.30 = 0.24 — no weight redistribution
+    assert score == pytest.approx(0.8 * 0.30)
 
 
 def test_aggregate_rules_and_velocity_active() -> None:
-    """When graph returns 0.0, its weight is redistributed."""
+    """When graph returns 0.0, its weight is not redistributed."""
     score = FraudEngine._aggregate(0.8, 0.5, 0.0)
-    # active weights: 0.30 + 0.35 = 0.65
-    expected = 0.8 * (0.30 / 0.65) + 0.5 * (0.35 / 0.65)
+    # 0.8 * 0.30 + 0.5 * 0.35 + 0.0 * 0.35 = 0.415
+    expected = 0.8 * 0.30 + 0.5 * 0.35
     assert score == pytest.approx(expected)
 
 
@@ -83,6 +84,7 @@ def test_aggregate_all_zero_returns_zero() -> None:
 
 
 def test_aggregate_only_graph_active() -> None:
-    """When only graph returns a score, it gets full weight."""
+    """When only graph returns a score, only the graph weight contributes."""
     score = FraudEngine._aggregate(0.0, 0.0, 0.7)
-    assert score == pytest.approx(0.7)
+    # 0.7 * 0.35 = 0.245 — no weight redistribution
+    assert score == pytest.approx(0.7 * 0.35)

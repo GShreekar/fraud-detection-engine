@@ -91,29 +91,18 @@ class FraudEngine:
         velocity_score: float,
         graph_score: float,
     ) -> float:
-        """Compute weighted score, redistributing inactive service weight.
+        """Compute weighted fraud score using configured service weights.
 
-        When velocity or graph return 0.0 (no data / service unavailable),
-        their configured weight is redistributed proportionally to the
-        services that did produce a non-zero score.  If every service
-        returns 0.0 the final score is 0.0.
+        Each service's score is multiplied by its configured weight and
+        the results are summed.  A score of 0.0 from any service simply
+        means that service found no fraud indicators — its weight is
+        NOT redistributed to other services.
         """
-        service_weights: list[tuple[float, float]] = [
-            (rules_score, settings.WEIGHT_RULES),
-            (velocity_score, settings.WEIGHT_VELOCITY),
-            (graph_score, settings.WEIGHT_GRAPH),
-        ]
-
-        active_weight = sum(w for s, w in service_weights if s > 0.0)
-
-        if active_weight == 0.0:
-            return 0.0
-
-        # Scale each active service's weight so active weights sum to 1.0
-        return sum(
-            score * (weight / active_weight)
-            for score, weight in service_weights
-            if score > 0.0
+        return min(
+            rules_score * settings.WEIGHT_RULES
+            + velocity_score * settings.WEIGHT_VELOCITY
+            + graph_score * settings.WEIGHT_GRAPH,
+            1.0,
         )
 
     @staticmethod
