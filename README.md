@@ -105,6 +105,8 @@ uvicorn app.main:app --reload
 | Document | Description |
 |---|---|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full system design — components, data flow, scoring model |
+| [SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md) | Detailed end-to-end explanation of how the entire facility works |
+| [RUN_GUIDE.md](docs/RUN_GUIDE.md) | Complete instructions — local dev, Docker, testing, CI/CD, production |
 | [IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | Step-by-step phased build plan |
 | [DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | Conventions, extension patterns, testing standards |
 | [API_REFERENCE.md](docs/API_REFERENCE.md) | Endpoint contracts, schemas, error codes |

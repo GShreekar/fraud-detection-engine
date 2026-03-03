@@ -5,8 +5,12 @@ Each rule receives the transaction and returns a partial score contribution
 plus an optional reason string.
 """
 
+import logging
+
 from app.config import settings
 from app.models.transaction import TransactionRequest
+
+logger = logging.getLogger(__name__)
 
 # --- Score contributions per rule (Phase 2) ---
 HIGH_AMOUNT_SCORE = 0.4
