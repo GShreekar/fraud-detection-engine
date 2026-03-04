@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,6 +8,8 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
 
     # --- Redis ---
+    # Accepts either REDIS_HOST+REDIS_PORT or a full REDIS_URL (e.g. redis://host:6379)
+    REDIS_URL: str | None = None
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
 
@@ -48,6 +52,17 @@ class Settings(BaseSettings):
     WEIGHT_GRAPH: float = 0.25
 
     model_config = SettingsConfigDict(env_file=".env")
+
+    @model_validator(mode="after")
+    def _parse_redis_url(self) -> "Settings":
+        """Extract REDIS_HOST and REDIS_PORT from REDIS_URL when provided."""
+        if self.REDIS_URL is not None:
+            parsed = urlparse(self.REDIS_URL)
+            if parsed.hostname:
+                self.REDIS_HOST = parsed.hostname
+            if parsed.port:
+                self.REDIS_PORT = parsed.port
+        return self
 
     @model_validator(mode="after")
     def _weights_must_sum_to_one(self) -> "Settings":
