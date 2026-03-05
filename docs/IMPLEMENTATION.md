@@ -261,21 +261,21 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ### Tasks
 
-- [ ] **Validate existing `Jenkinsfile`** — confirm all four stages (Checkout, Install, Test, Docker Build) run without errors.
-- [ ] **Add Docker login stage** — authenticate to a container registry (Docker Hub or a private registry) using Jenkins credentials.
-- [ ] **Add image tagging** — tag the image with both `BUILD_NUMBER` and `latest`.
-- [ ] **Add image push stage** — push the tagged image to the registry after a successful test run.
-- [ ] **Add environment-specific deploy stage** — deploy to a staging environment (e.g., Docker host, Kubernetes, or a cloud VM) using SSH or a Kubernetes manifest.
-- [ ] **Add pipeline failure notifications** — send a notification (email, Slack) on pipeline failure.
-- [ ] **Parameterize the pipeline** — allow `DEPLOY_ENV` (staging/production) to be passed as a pipeline parameter.
-- [ ] **Set up branch-based policies** — run tests on all branches; only deploy on `main`.
+- [x] **Validate existing `Jenkinsfile`** — confirm all four stages (Checkout, Install, Test, Docker Build) run without errors.
+- [x] **Add Docker login stage** — authenticate to a container registry (Docker Hub or a private registry) using Jenkins credentials.
+- [x] **Add image tagging** — tag the image with both `BUILD_NUMBER` and `latest`.
+- [x] **Add image push stage** — push the tagged image to the registry after a successful test run.
+- [x] **Add environment-specific deploy stage** — deploy to a staging environment (e.g., Docker host, Kubernetes, or a cloud VM) using SSH or a Kubernetes manifest.
+- [x] **Add pipeline failure notifications** — send a notification (email, Slack) on pipeline failure.
+- [x] **Parameterize the pipeline** — allow `DEPLOY_ENV` (staging/production) to be passed as a pipeline parameter.
+- [x] **Set up branch-based policies** — run tests on all branches; only deploy on `main`.
 
 ### Acceptance Criteria
 
-- [ ] Pipeline runs end-to-end from a fresh Git clone
-- [ ] Failed tests prevent the Docker build stage from running
-- [ ] Image is tagged and pushed to the registry on success
-- [ ] Pipeline status is reported back to the Git provider (commit status)
+- [x] Pipeline runs end-to-end from a fresh Git clone
+- [x] Failed tests prevent the Docker build stage from running
+- [x] Image is tagged and pushed to the registry on success
+- [x] Pipeline status is reported back to the Git provider (commit status)
 
 ---
 
