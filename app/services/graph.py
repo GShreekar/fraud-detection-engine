@@ -14,15 +14,15 @@ from app.models.transaction import TransactionRequest
 logger = logging.getLogger(__name__)
 
 # --- Score contributions per graph pattern (shared device tiers) ---
-SHARED_DEVICE_SCORE_TIER_LOW = 0.10
-SHARED_DEVICE_SCORE_TIER_MID = 0.30
-SHARED_DEVICE_SCORE_TIER_HIGH = 0.55
-SHARED_DEVICE_SCORE_TIER_MAX = 0.80
+SHARED_DEVICE_SCORE_TIER_LOW = 0.30
+SHARED_DEVICE_SCORE_TIER_MID = 0.65
+SHARED_DEVICE_SCORE_TIER_HIGH = 0.85
+SHARED_DEVICE_SCORE_TIER_MAX = 1.0
 
 # --- Score contributions per graph pattern (IP cluster tiers) ---
-IP_CLUSTER_SCORE_TIER_LOW = 0.15
-IP_CLUSTER_SCORE_TIER_MID = 0.35
-IP_CLUSTER_SCORE_TIER_MAX = 0.60
+IP_CLUSTER_SCORE_TIER_LOW = 0.30
+IP_CLUSTER_SCORE_TIER_MID = 0.60
+IP_CLUSTER_SCORE_TIER_MAX = 0.90
 
 
 class GraphService:

@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,6 +8,8 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
 
     # --- Redis ---
+    # Accepts either REDIS_HOST+REDIS_PORT or a full REDIS_URL (e.g. redis://host:6379)
+    REDIS_URL: str | None = None
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
 
@@ -24,7 +28,17 @@ class Settings(BaseSettings):
     # Transactions above this USD amount trigger the high-amount rule
     HIGH_AMOUNT_THRESHOLD: float = 1000.0
     # ISO 3166-1 alpha-2 country codes considered high-risk
-    HIGH_RISK_COUNTRIES: list[str] = ["NG", "GH", "KP", "IR", "SY", "YE", "SO", "MM"]
+    HIGH_RISK_COUNTRIES: list[str] = [
+        "NG", "GH", "KP", "IR", "SY", "YE", "SO", "MM",
+        "CN", "KE",
+    ]
+    # Accounts younger than this many days are considered new (higher risk)
+    RULE_NEW_ACCOUNT_DAYS: int = 30
+    # Merchant categories considered high-risk for fraud
+    HIGH_RISK_MERCHANTS: list[str] = [
+        "crypto", "gambling", "gift_cards", "wire_transfer",
+        "crypto_exchange", "luxury_goods",
+    ]
 
     # --- GraphService (Phase 4) ---
     # Minimum number of distinct users on the same device before scoring begins
@@ -33,11 +47,22 @@ class Settings(BaseSettings):
     GRAPH_IP_CLUSTER_THRESHOLD: int = 3
 
     # --- FraudEngine score weights (Phase 5) — must sum to 1.0 ---
-    WEIGHT_RULES: float = 0.30
-    WEIGHT_VELOCITY: float = 0.35
-    WEIGHT_GRAPH: float = 0.35
+    WEIGHT_RULES: float = 0.50
+    WEIGHT_VELOCITY: float = 0.25
+    WEIGHT_GRAPH: float = 0.25
 
     model_config = SettingsConfigDict(env_file=".env")
+
+    @model_validator(mode="after")
+    def _parse_redis_url(self) -> "Settings":
+        """Extract REDIS_HOST and REDIS_PORT from REDIS_URL when provided."""
+        if self.REDIS_URL is not None:
+            parsed = urlparse(self.REDIS_URL)
+            if parsed.hostname:
+                self.REDIS_HOST = parsed.hostname
+            if parsed.port:
+                self.REDIS_PORT = parsed.port
+        return self
 
     @model_validator(mode="after")
     def _weights_must_sum_to_one(self) -> "Settings":
