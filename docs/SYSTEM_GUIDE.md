@@ -746,3 +746,159 @@ This is a development/MVP version. The following security measures are in place:
 | Log redaction            | Redact PII (user IDs, IPs) in production logs              |
 | Dependency scanning      | Add `pip-audit` or `safety` to the CI pipeline              |
 | Image scanning           | Add `trivy` or `grype` Docker image scanning to CI          |
+
+---
+
+## 16. Scalability, Performance & Consistency Evaluation
+
+This section provides a rigorous evaluation of both NoSQL databases used in the system, covering CAP trade-offs, consistency models, sharding/replication strategies, persistence configurations, and performance characteristics.
+
+### 16.1 CAP Theorem Analysis
+
+The CAP theorem states that a distributed data store can guarantee at most two of three properties: **Consistency**, **Availability**, and **Partition tolerance**.
+
+#### Redis — AP (Availability + Partition Tolerance)
+
+| CAP Property | Redis Behavior |
+|---|---|
+| **Consistency** | Redis uses **asynchronous replication** in cluster mode. Writes acknowledged on the primary may not yet be propagated to replicas — a brief inconsistency window exists. In single-node mode, Redis is trivially consistent. |
+| **Availability** | Redis prioritizes availability. Even during a network partition, each partition's master continues accepting writes. After the partition heals, conflict resolution occurs (last-write-wins for keys). |
+| **Partition Tolerance** | Redis Cluster uses **hash-slot partitioning** across nodes (16384 slots), with automatic failover when a master becomes unreachable. |
+
+**Trade-off justification for this system:** Velocity counters are ephemeral. A brief stale count (e.g., showing 9 transactions when the true count is 10) during a partition is acceptable — the next transaction will correct it. The cost of a false negative (allowing one extra transaction) is far lower than the cost of blocking all transactions while waiting for strong consistency.
+
+#### Neo4j — CA (Consistency + Availability)
+
+| CAP Property | Neo4j Behavior |
+|---|---|
+| **Consistency** | Neo4j provides **ACID transactions** per database. Within a Causal Cluster, it offers **causal consistency** — a read after a write in the same session is guaranteed to see that write, even if routed to a read replica. |
+| **Availability** | A Neo4j Causal Cluster with 3+ core servers can tolerate 1 core failure and remain available. Read replicas can serve read-only queries even during leader election. |
+| **Partition Tolerance** | During a network partition, the minority partition loses write availability to preserve consistency (Raft consensus requires a majority quorum). |
+
+**Trade-off justification for this system:** Graph pattern queries (shared device, IP cluster) **must see the transaction just written** — a stale graph that misses the current transaction would produce inaccurate fraud scores. ACID consistency is essential for correctness in this write-then-query pattern.
+
+### 16.2 Redis Performance & Scalability Characteristics
+
+#### Sorted Set Operation Complexity
+
+| Operation | Command | Time Complexity | Purpose |
+|---|---|---|---|
+| Add transaction | `ZADD` | O(log N) | Insert into sorted set |
+| Prune window | `ZREMRANGEBYSCORE` | O(log N + M)* | Remove expired entries |
+| Count in window | `ZCOUNT` | O(log N) | Count active entries |
+| Set TTL | `EXPIRE` | O(1) | Auto-cleanup idle keys |
+
+*M = number of entries removed in the prune step. In practice, M is small (1–3 entries per call), so the effective complexity is O(log N).
+
+All four commands are executed in a **single atomic pipeline** (one network round-trip), eliminating race conditions under concurrent requests.
+
+#### Throughput Targets
+
+| Metric | Expected Value | Basis |
+|---|---|---|
+| Single-node throughput | 100,000+ ops/sec | Redis benchmark with pipelining on a 4-core node |
+| Velocity check latency | < 1ms | Pipeline of 4 sorted set operations on a warm dataset |
+| Key memory footprint | ~200 bytes per key (10-entry sorted set) | Each member ≈ 30 bytes (txn_id:timestamp), 10 members + overhead |
+
+#### Sharding Strategy (Redis Cluster)
+
+For horizontal scaling beyond a single node:
+
+| Aspect | Strategy |
+|---|---|
+| **Partitioning** | Redis Cluster auto-shards using CRC16 hash of the key modulo 16384 slots. No application-level sharding logic needed. |
+| **Key distribution** | Velocity keys are naturally well-distributed because they are keyed by user_id or ip_address — high cardinality ensures even slot distribution. |
+| **Hot spots** | A single user or IP cannot create a hot spot because each key maps to exactly one slot on one node. |
+| **Failover** | Each master has a replica. If a master fails, the replica is promoted automatically within seconds. |
+
+#### Persistence Configuration
+
+```yaml
+# docker-compose.yml
+command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+```
+
+| Setting | Value | Rationale |
+|---|---|---|
+| `appendonly yes` | AOF persistence | Durability: every write is appended to disk. On restart, Redis replays the AOF to restore state. |
+| `maxmemory 256mb` | Memory cap | Prevents OOM-kill on the host. Sufficient for ~1M velocity keys. |
+| `maxmemory-policy allkeys-lru` | LRU eviction | When memory is full, the least-recently-used key is evicted — this is safe because stale velocity keys are the least important data. |
+
+### 16.3 Neo4j Performance & Scalability Characteristics
+
+#### Query Complexity Analysis
+
+| Pattern Query | Hops | Complexity | Explanation |
+|---|---|---|---|
+| Shared device detection | 3 | O(k) | k = edges from the device node. Uniqueness constraint ensures index-backed MERGE. No label scan. |
+| IP cluster detection | 3 | O(k) | k = edges from the IP node. Same index-backed pattern. |
+| Merchant ring detection | 3 | O(k) | k = edges from the merchant node. Time-window filter (`WHERE t.timestamp > datetime() - duration(...)`) prunes stale relationships. |
+| New device for user | 2 | O(k) | k = transactions by this user on this device. Typically k ≤ 1 for a new device. |
+
+**Key insight:** All queries traverse a fixed number of hops from a known starting node (identified by a unique constraint index). This makes query time proportional to the **degree of the target node**, not the total size of the graph.
+
+#### Schema Constraints and Indexes
+
+The `initialize_schema()` function creates the following at startup:
+
+```
+CREATE CONSTRAINT user_id_unique IF NOT EXISTS FOR (u:User) REQUIRE u.user_id IS UNIQUE
+CREATE CONSTRAINT device_id_unique IF NOT EXISTS FOR (d:Device) REQUIRE d.device_id IS UNIQUE
+CREATE CONSTRAINT ip_address_unique IF NOT EXISTS FOR (ip:IPAddress) REQUIRE ip.ip_address IS UNIQUE
+CREATE CONSTRAINT transaction_id_unique IF NOT EXISTS FOR (t:Transaction) REQUIRE t.transaction_id IS UNIQUE
+CREATE CONSTRAINT merchant_id_unique IF NOT EXISTS FOR (m:Merchant) REQUIRE m.merchant_id IS UNIQUE
+CREATE INDEX device_id_index IF NOT EXISTS FOR (d:Device) ON (d.device_id)
+CREATE INDEX ip_address_index IF NOT EXISTS FOR (ip:IPAddress) ON (ip.ip_address)
+CREATE INDEX merchant_id_index IF NOT EXISTS FOR (m:Merchant) ON (m.merchant_id)
+```
+
+**Impact:** Without these constraints, every `MERGE` performs a full label scan (O(N) where N = all nodes with that label). With constraints, `MERGE` uses the unique index (O(log N)) — a critical performance difference at scale.
+
+#### Replication Strategy (Causal Cluster)
+
+| Component | Count | Role |
+|---|---|---|
+| Core servers | 3 (recommended) | Participate in Raft consensus for writes. Quorum = 2. |
+| Read replicas | 1+ (optional) | Serve read-only queries. Eventually consistent via transaction log shipping. |
+| Causal consistency | Driver-enforced | The Neo4j async driver supports **bookmarks** — a write returns a bookmark that is passed to subsequent reads, ensuring causal ordering. |
+
+**Current deployment:** Single-node for development. The Docker Compose file includes a comment for `NEO4J_dbms_mode` to indicate cluster-mode awareness.
+
+#### Throughput Targets
+
+| Metric | Expected Value | Basis |
+|---|---|---|
+| MERGE write latency | 5–15ms | Single MERGE with 5 nodes + 4 relationships, index-backed |
+| Pattern query latency | 2–8ms | 3-hop traversal from indexed starting node |
+| Combined (write + query) | 10–25ms | Sequential within one session |
+
+### 16.4 System-Level Performance Budget
+
+| Component | p50 Latency | p95 Latency | Notes |
+|---|---|---|---|
+| FastAPI request parsing | < 1ms | < 2ms | Pydantic v2 with compiled validators |
+| RulesService | < 0.1ms | < 0.5ms | Pure Python, no I/O |
+| VelocityService (Redis) | < 1ms | < 3ms | Pipeline of 4 commands |
+| GraphService (Neo4j) | 10–15ms | 25ms | MERGE + 4 pattern queries (concurrent) |
+| Score aggregation | < 0.1ms | < 0.1ms | Arithmetic only |
+| **Total request** | **~15ms** | **~30ms** | Dominated by Neo4j I/O |
+
+### 16.5 Benchmark Methodology
+
+A benchmark script (`scripts/benchmark.py`) is provided to generate reproducible performance measurements:
+
+1. **Setup:** Docker Compose stack running Redis + Neo4j + API.
+2. **Workload:** 1000 synthetic transactions with varied fraud patterns (clean, high-amount, velocity burst, shared device).
+3. **Measurement:** Per-request latency (p50, p95, p99), aggregate throughput (requests/sec), error rate.
+4. **Concurrency:** Sequential baseline, then 5/10/20 concurrent clients using `asyncio.gather`.
+5. **Output:** JSON results file with raw latency arrays for statistical analysis.
+
+### 16.6 Consistency Level Choices — Evidence-Based Justification
+
+| Decision | Choice | Evidence |
+|---|---|---|
+| Redis pipeline vs individual commands | Pipeline | Eliminates race condition where concurrent requests could read between ZADD and ZREMRANGEBYSCORE, producing an inflated count. |
+| Neo4j `MERGE` with constraints | Unique constraints | Without constraints, two concurrent requests for the same user could create duplicate User nodes. The constraint makes MERGE atomic and idempotent. |
+| Neo4j timestamp storage | Native `datetime()` | Storing as ISO string prevents time-range comparisons in Cypher. Native datetime enables `WHERE t.timestamp > datetime() - duration(...)` filters. |
+| Neo4j time-window on pattern queries | 30-day rolling window | Without a time window, a device shared by 2 users 3 years ago would forever inflate the score. The window ensures only recent relationships contribute. |
+| Redis AOF persistence | `appendonly yes` | Ensures velocity state survives a container restart without requiring warm-up. The trade-off (slightly higher write latency due to fsync) is acceptable given the sub-millisecond baseline. |

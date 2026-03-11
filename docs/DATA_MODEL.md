@@ -40,15 +40,20 @@ Redis is not the source of truth for any data. If Redis data is lost, velocity h
 
 Each velocity dimension has its own key namespace. Keys follow a strict colon-separated hierarchy.
 
-| Dimension  | Key Pattern                    | Example                     |
-|------------|--------------------------------|-----------------------------|
-| User       | `vel:user:{user_id}`           | `vel:user:user_42`          |
-| IP Address | `vel:ip:{ip_address}`          | `vel:ip:192.168.1.10`       |
+| Dimension  | Key Pattern                          | Example                          |
+|------------|--------------------------------------|----------------------------------|
+| User       | `velocity:user:{user_id}`            | `velocity:user:user_42`         |
+| IP Address | `velocity:ip:{ip_address}`           | `velocity:ip:192.168.1.10`      |
+| Device     | `velocity:device:{device_id}`        | `velocity:device:device_abc123` |
+| Country Cache | `user:country:{user_id}`          | `user:country:user_42`          |
+| Amount History | `amounts:user:{user_id}`         | `amounts:user:user_42`          |
 
 **Namespace rules:**
-- All velocity keys are prefixed with `vel:` to distinguish them from any future key types.
-- The second segment identifies the dimension (`user` or `ip`).
+- Velocity sliding-window keys use the `velocity:` prefix.
+- The second segment identifies the dimension (`user`, `ip`, or `device`).
 - The third segment is the exact value from the `TransactionRequest` field (no hashing, no normalization).
+- Country cache keys use the `user:country:` prefix and store a plain string (the last-seen country code) with a 24-hour TTL.
+- Amount history keys use the `amounts:user:` prefix and store a sorted set of recent transaction amounts for spike detection.
 - Keys must never collide across dimensions — the dimension segment ensures uniqueness.
 
 ---
@@ -150,7 +155,17 @@ Represents a single financial transaction event.
 | `transaction_id` | String   | Unique     | Matches `transaction_id` in the request |
 | `amount`         | Float    | —          | Transaction amount in USD           |
 | `country`        | String   | —          | ISO country code of the transaction |
-| `timestamp`      | DateTime | —          | UTC timestamp of the transaction    |
+| `timestamp`      | DateTime | —          | UTC timestamp of the transaction (native Neo4j datetime) |
+
+---
+
+#### `Merchant`
+
+Represents a merchant or point-of-sale terminal.
+
+| Property      | Type   | Constraint | Description                            |
+|---------------|--------|------------|----------------------------------------|
+| `merchant_id` | String | Unique     | Matches `merchant_id` in the transaction request |
 
 ---
 
@@ -161,6 +176,7 @@ Represents a single financial transaction event.
 | `PERFORMED`       | `User`        | `Transaction` | This user initiated this transaction                      |
 | `USED_DEVICE`     | `Transaction` | `Device`      | This transaction was made from this device                |
 | `ORIGINATED_FROM` | `Transaction` | `IPAddress`   | This transaction originated from this IP address          |
+| `AT_MERCHANT`     | `Transaction` | `Merchant`    | This transaction was processed at this merchant           |
 
 Relationships carry no additional properties in the current design. Properties can be added in future iterations (e.g., `confidence` on `USED_DEVICE` for fuzzy fingerprinting).
 
@@ -180,15 +196,15 @@ Relationships carry no additional properties in the current design. Properties c
 ┌───────────────────────────────────────────────────────┐
 │                      Transaction                       │
 │  (transaction_id, amount, country, timestamp)         │
-└───────┬────────────────┬──────────────────────────────┘
-        │                │
-  USED_DEVICE   ORIGINATED_FROM
-        │                │
-        ▼                ▼
- ┌────────────┐  ┌──────────────┐
- │   Device   │  │  IPAddress   │
- │(device_id) │  │(ip_address)  │
- └────────────┘  └──────────────┘
+└───────┬──────────┬────────────────┬───────────────────┘
+        │          │                │
+  USED_DEVICE ORIGINATED_FROM  AT_MERCHANT
+        │          │                │
+        ▼          ▼                ▼
+ ┌────────────┐ ┌──────────────┐ ┌──────────────┐
+ │   Device   │ │  IPAddress   │ │  Merchant    │
+ │(device_id) │ │(ip_address)  │ │(merchant_id) │
+ └────────────┘ └──────────────┘ └──────────────┘
 ```
 
 ---
@@ -261,18 +277,34 @@ All variables are loaded from `.env` by `app/config.py`. The `.env.example` file
 | `APP_ENV`                       | string  | `development`                        | No       | Deployment environment tag                                           |
 | `REDIS_HOST`                    | string  | `localhost`                          | Yes      | Redis hostname                                                       |
 | `REDIS_PORT`                    | integer | `6379`                               | Yes      | Redis port                                                           |
+| `REDIS_PASSWORD`                | string  | `None`                               | No       | Redis AUTH password                                                  |
+| `REDIS_DB`                      | integer | `0`                                  | No       | Redis database index                                                 |
+| `REDIS_SOCKET_TIMEOUT`          | integer | `5`                                  | No       | Redis socket timeout in seconds                                      |
+| `REDIS_MAX_CONNECTIONS`         | integer | `50`                                 | No       | Redis connection pool size                                           |
 | `NEO4J_URI`                     | string  | `bolt://localhost:7687`              | Yes      | Neo4j Bolt connection URI                                            |
 | `NEO4J_USER`                    | string  | `neo4j`                              | Yes      | Neo4j username                                                       |
 | `NEO4J_PASSWORD`                | string  | `password`                           | Yes      | Neo4j password (use a secrets manager in production)                 |
+| `NEO4J_DATABASE`                | string  | `neo4j`                              | No       | Neo4j database name                                                  |
+| `NEO4J_MAX_CONNECTION_POOL_SIZE`| integer | `50`                                 | No       | Neo4j driver connection pool size                                    |
+| `NEO4J_CONNECTION_TIMEOUT`      | integer | `5`                                  | No       | Neo4j connection timeout in seconds                                  |
 | `VELOCITY_WINDOW_SECONDS`       | integer | `60`                                 | No       | Sliding window duration for velocity checks                          |
-| `VELOCITY_MAX_TRANSACTIONS`     | integer | `10`                                 | No       | Transaction count threshold that triggers velocity score             |
+| `VELOCITY_MAX_TRANSACTIONS`     | integer | `10`                                 | No       | Legacy: transaction count threshold (kept for backward compat)       |
+| `VELOCITY_MAX_TRANSACTIONS_USER`| integer | `10`                                 | No       | User-dimension velocity threshold                                    |
+| `VELOCITY_MAX_TRANSACTIONS_IP`  | integer | `10`                                 | No       | IP-dimension velocity threshold                                      |
+| `VELOCITY_MAX_TRANSACTIONS_DEVICE` | integer | `10`                              | No       | Device-dimension velocity threshold                                  |
+| `VELOCITY_COUNTRY_CACHE_TTL_SECONDS` | integer | `86400`                         | No       | TTL for user's last-seen country cache (24h default)                 |
+| `VELOCITY_AMOUNT_SPIKE_MULTIPLIER` | float | `5.0`                              | No       | Current amount must exceed mean × this factor to trigger spike       |
+| `VELOCITY_AMOUNT_HISTORY_SIZE`  | integer | `20`                                 | No       | Number of recent amounts to keep for spike calculation               |
 | `HIGH_AMOUNT_THRESHOLD`         | float   | `1000.0`                             | No       | USD amount above which the high-amount rule fires (RulesService)     |
-| `HIGH_RISK_COUNTRIES`           | list    | `["NG","GH","KP","IR","SY","YE","SO","MM"]` | No  | ISO 3166-1 alpha-2 codes treated as high-risk (RulesService)    |
+| `HIGH_RISK_COUNTRIES`           | list    | `["NG","GH","KP","IR","SY","YE","SO","MM","CN","KE"]` | No  | ISO 3166-1 alpha-2 codes treated as high-risk (RulesService)    |
 | `GRAPH_SHARED_DEVICE_THRESHOLD` | integer | `2`                                  | No       | Min distinct users on a device before graph scoring begins           |
 | `GRAPH_IP_CLUSTER_THRESHOLD`    | integer | `3`                                  | No       | Min distinct users on an IP before graph scoring begins              |
-| `WEIGHT_RULES`                  | float   | `0.30`                               | No       | FraudEngine weight for RulesService score contribution               |
-| `WEIGHT_VELOCITY`               | float   | `0.35`                               | No       | FraudEngine weight for VelocityService score contribution            |
-| `WEIGHT_GRAPH`                  | float   | `0.35`                               | No       | FraudEngine weight for GraphService score contribution               |
+| `GRAPH_MERCHANT_RING_THRESHOLD` | integer | `5`                                  | No       | Min distinct users at a merchant before ring scoring begins          |
+| `GRAPH_MERCHANT_RING_WINDOW_HOURS` | integer | `24`                              | No       | Rolling window for merchant ring detection (hours)                   |
+| `GRAPH_TIME_WINDOW_DAYS`        | integer | `30`                                 | No       | Rolling window for graph pattern queries (days)                      |
+| `WEIGHT_RULES`                  | float   | `0.50`                               | No       | FraudEngine weight for RulesService score contribution               |
+| `WEIGHT_VELOCITY`               | float   | `0.25`                               | No       | FraudEngine weight for VelocityService score contribution            |
+| `WEIGHT_GRAPH`                  | float   | `0.25`                               | No       | FraudEngine weight for GraphService score contribution               |
 
 **Rules for adding new variables:**
 1. Add the field with a default to `Settings` in `app/config.py`.

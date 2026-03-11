@@ -6,6 +6,9 @@ import pytest
 
 from app.models.transaction import TransactionRequest
 from app.services.velocity import (
+    VELOCITY_AMOUNT_SPIKE_SCORE,
+    VELOCITY_COUNTRY_CHANGE_SCORE,
+    VELOCITY_DEVICE_SCORE,
     VELOCITY_IP_SCORE,
     VELOCITY_USER_SCORE,
     VelocityService,
@@ -213,3 +216,168 @@ async def test_redis_key_has_ttl_set(
     await velocity_service._check_user_velocity(fake_redis, txn)
     ttl = await fake_redis.ttl(f"velocity:user:{txn.user_id}")
     assert ttl > 0
+
+
+# ── _check_device_velocity ────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_device_velocity_does_not_trigger_for_single_transaction(
+    velocity_service: VelocityService, fake_redis
+) -> None:
+    """A single transaction should not exceed the device velocity threshold."""
+    txn = _make_transaction()
+    score, reason = await velocity_service._check_device_velocity(fake_redis, txn)
+    assert score == 0.0
+    assert reason is None
+
+
+@pytest.mark.asyncio
+async def test_device_velocity_triggers_when_threshold_exceeded(
+    velocity_service: VelocityService, fake_redis
+) -> None:
+    """A burst of transactions from the same device exceeding threshold should trigger."""
+    for i in range(11):
+        txn = _make_transaction(transaction_id=f"txn_dev_{i:03d}")
+        await velocity_service._check_device_velocity(fake_redis, txn)
+
+    txn = _make_transaction(transaction_id="txn_dev_trigger")
+    score, reason = await velocity_service._check_device_velocity(fake_redis, txn)
+    assert score == VELOCITY_DEVICE_SCORE
+    assert reason == "velocity_device_exceeded"
+
+
+# ── _check_country_change ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_country_change_no_trigger_same_country(
+    velocity_service: VelocityService, fake_redis
+) -> None:
+    """Same country as last seen should not trigger."""
+    txn1 = _make_transaction(transaction_id="txn_cc1")
+    txn2 = _make_transaction(transaction_id="txn_cc2")
+    await velocity_service._check_country_change(fake_redis, txn1)
+    score, reason = await velocity_service._check_country_change(fake_redis, txn2)
+    assert score == 0.0
+    assert reason is None
+
+
+@pytest.mark.asyncio
+async def test_country_change_triggers_different_country(
+    velocity_service: VelocityService, fake_redis
+) -> None:
+    """Different country from last seen should trigger."""
+    txn_us = TransactionRequest(
+        transaction_id="txn_cc_us",
+        user_id="user_1",
+        amount=100.0,
+        merchant_id="merchant_1",
+        device_id="device_abc",
+        ip_address="10.0.0.1",
+        country="US",
+    )
+    txn_gb = TransactionRequest(
+        transaction_id="txn_cc_gb",
+        user_id="user_1",
+        amount=100.0,
+        merchant_id="merchant_1",
+        device_id="device_abc",
+        ip_address="10.0.0.1",
+        country="GB",
+    )
+    await velocity_service._check_country_change(fake_redis, txn_us)
+    score, reason = await velocity_service._check_country_change(fake_redis, txn_gb)
+    assert score == VELOCITY_COUNTRY_CHANGE_SCORE
+    assert reason == "user_country_changed"
+
+
+@pytest.mark.asyncio
+async def test_country_change_first_transaction_no_trigger(
+    velocity_service: VelocityService, fake_redis
+) -> None:
+    """First transaction for a user (no prior country) should not trigger."""
+    txn = _make_transaction(transaction_id="txn_cc_first")
+    score, reason = await velocity_service._check_country_change(fake_redis, txn)
+    assert score == 0.0
+    assert reason is None
+
+
+# ── _check_amount_spike ───────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_amount_spike_no_trigger_insufficient_history(
+    velocity_service: VelocityService, fake_redis
+) -> None:
+    """Amount spike should not trigger with fewer than 2 prior entries."""
+    txn = _make_transaction(transaction_id="txn_spike_1")
+    score, reason = await velocity_service._check_amount_spike(fake_redis, txn)
+    assert score == 0.0
+    assert reason is None
+
+
+@pytest.mark.asyncio
+async def test_amount_spike_no_trigger_normal_amount(
+    velocity_service: VelocityService, fake_redis
+) -> None:
+    """Amount spike should not trigger for normal spending."""
+    # Build history of ~100 amounts
+    for i in range(5):
+        txn = TransactionRequest(
+            transaction_id=f"txn_hist_{i}",
+            user_id="user_1",
+            amount=100.0,
+            merchant_id="merchant_1",
+            device_id="device_abc",
+            ip_address="10.0.0.1",
+            country="US",
+        )
+        await velocity_service._check_amount_spike(fake_redis, txn)
+
+    # Normal amount — should not trigger
+    txn_normal = TransactionRequest(
+        transaction_id="txn_spike_normal",
+        user_id="user_1",
+        amount=150.0,
+        merchant_id="merchant_1",
+        device_id="device_abc",
+        ip_address="10.0.0.1",
+        country="US",
+    )
+    score, reason = await velocity_service._check_amount_spike(fake_redis, txn_normal)
+    assert score == 0.0
+    assert reason is None
+
+
+@pytest.mark.asyncio
+async def test_amount_spike_triggers_for_large_spike(
+    velocity_service: VelocityService, fake_redis
+) -> None:
+    """Amount spike should trigger when current amount far exceeds average."""
+    # Build history of ~100 amounts
+    for i in range(5):
+        txn = TransactionRequest(
+            transaction_id=f"txn_hist_spike_{i}",
+            user_id="user_spike",
+            amount=50.0,
+            merchant_id="merchant_1",
+            device_id="device_abc",
+            ip_address="10.0.0.1",
+            country="US",
+        )
+        await velocity_service._check_amount_spike(fake_redis, txn)
+
+    # Huge spike — should trigger (default multiplier is 5.0, avg=50, spike=500 >> 250)
+    txn_spike = TransactionRequest(
+        transaction_id="txn_spike_big",
+        user_id="user_spike",
+        amount=500.0,
+        merchant_id="merchant_1",
+        device_id="device_abc",
+        ip_address="10.0.0.1",
+        country="US",
+    )
+    score, reason = await velocity_service._check_amount_spike(fake_redis, txn_spike)
+    assert score == VELOCITY_AMOUNT_SPIKE_SCORE
+    assert reason == "amount_spike"

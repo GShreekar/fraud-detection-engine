@@ -12,17 +12,32 @@ class Settings(BaseSettings):
     REDIS_URL: str | None = None
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
+    REDIS_PASSWORD: str | None = None
+    REDIS_DB: int = 0
+    REDIS_SOCKET_TIMEOUT: int = 5
+    REDIS_MAX_CONNECTIONS: int = 50
 
     # --- Neo4j ---
     NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: str = "password"
+    NEO4J_DATABASE: str = "neo4j"
+    NEO4J_MAX_CONNECTION_POOL_SIZE: int = 50
+    NEO4J_CONNECTION_TIMEOUT: int = 5
 
     # --- Velocity checks (Phase 3) ---
     # Sliding window duration in seconds
     VELOCITY_WINDOW_SECONDS: int = 60
-    # Maximum transactions within the window before a score is returned
+    # Maximum transactions within the window before a score is returned (per dimension)
     VELOCITY_MAX_TRANSACTIONS: int = 10
+    VELOCITY_MAX_TRANSACTIONS_USER: int = 10
+    VELOCITY_MAX_TRANSACTIONS_IP: int = 10
+    VELOCITY_MAX_TRANSACTIONS_DEVICE: int = 10
+    # Country-change detection TTL (24 hours)
+    VELOCITY_COUNTRY_CACHE_TTL_SECONDS: int = 86400
+    # Amount spike detection
+    VELOCITY_AMOUNT_SPIKE_MULTIPLIER: float = 5.0
+    VELOCITY_AMOUNT_HISTORY_SIZE: int = 20
 
     # --- RulesService (Phase 2) ---
     # Transactions above this USD amount trigger the high-amount rule
@@ -45,6 +60,11 @@ class Settings(BaseSettings):
     GRAPH_SHARED_DEVICE_THRESHOLD: int = 2
     # Minimum number of distinct users on the same IP before scoring begins
     GRAPH_IP_CLUSTER_THRESHOLD: int = 3
+    # Merchant ring detection — distinct users at the same merchant
+    GRAPH_MERCHANT_RING_THRESHOLD: int = 5
+    GRAPH_MERCHANT_RING_WINDOW_HOURS: int = 24
+    # Rolling time-window filter to ignore stale graph signals (days)
+    GRAPH_TIME_WINDOW_DAYS: int = 30
 
     # --- FraudEngine score weights (Phase 5) — must sum to 1.0 ---
     WEIGHT_RULES: float = 0.50

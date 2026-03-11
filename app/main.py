@@ -5,9 +5,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.db.neo4j_client import close_neo4j, connect_neo4j
-from app.db.redis_client import close_redis, connect_redis
+from app.db.neo4j_client import close_neo4j, connect_neo4j, get_driver
+from app.db.redis_client import close_redis, connect_redis, get_redis
 from app.routes import transaction
+from app.services.graph import initialize_schema
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,8 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     """Startup and shutdown hooks for external connections."""
     await connect_redis()
-    connect_neo4j()
+    await connect_neo4j()
+    await initialize_schema()
     yield
     await close_redis()
     await close_neo4j()
@@ -84,6 +86,38 @@ app.include_router(transaction.router, prefix="/api/v1", tags=["transactions"])
 
 
 @app.get("/health", tags=["health"])
-def health_check():
-    """Return application health status."""
-    return {"status": "ok"}
+async def health_check():
+    """Return application health status with backend connectivity probes."""
+    redis_ok = False
+    neo4j_ok = False
+
+    # Probe Redis
+    try:
+        redis = get_redis()
+        if redis is not None:
+            await redis.ping()
+            redis_ok = True
+    except Exception:
+        pass
+
+    # Probe Neo4j
+    try:
+        driver = get_driver()
+        if driver is not None:
+            await driver.verify_connectivity()
+            neo4j_ok = True
+    except Exception:
+        pass
+
+    all_healthy = redis_ok and neo4j_ok
+    status = "ok" if all_healthy else "degraded"
+    status_code = 200 if all_healthy else 503
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status,
+            "redis": redis_ok,
+            "neo4j": neo4j_ok,
+        },
+    )

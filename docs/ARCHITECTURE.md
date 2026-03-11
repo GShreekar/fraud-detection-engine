@@ -343,3 +343,77 @@ No other files need to change.
 
 ### Fail-Safe Defaults
 If Redis or Neo4j is unavailable, the corresponding service should return `(0.0, [])` and log the error rather than crashing the entire request pipeline. This is implemented per service, not at the orchestrator level.
+
+---
+
+## 10. NoSQL Database Selection Justification
+
+This section explains **why Redis and Neo4j were chosen** as the NoSQL databases for this system, and why alternatives were rejected. The selection is driven by three factors: **data type and access pattern**, **scalability requirements**, and **consistency needs**.
+
+### 10.1 Redis — Velocity Store (Key-Value / Sorted Set)
+
+#### Why Redis?
+
+| Factor | Redis Fit |
+|--------|-----------|
+| **Data type** | Velocity data is transient, time-bounded counters — a perfect match for Redis sorted sets with automatic TTL expiry. |
+| **Access pattern** | Every transaction triggers a write + prune + count sequence on a single key. Redis sorted sets provide all three operations in O(log N) time — `ZADD`, `ZREMRANGEBYSCORE`, `ZCOUNT` — within a single pipeline round-trip. |
+| **Latency requirement** | Fraud scoring is in the critical path of transaction processing. Redis delivers sub-millisecond latency for sorted set operations, ensuring the velocity check does not add observable delay. |
+| **CAP position** | Redis is an **AP system** (Availability + Partition tolerance). In a fraud detection context, a brief inconsistency window (where a count is slightly stale) is acceptable — the cost of blocking a legitimate transaction by waiting for strict consistency far outweighs the risk of a momentarily imprecise count. |
+| **Persistence** | Redis AOF (Append-Only File) provides durable writes for recovery, configured via `--appendonly yes` in Docker Compose. If velocity data is lost, the window simply resets — no financial data is lost. |
+
+#### Why Not Memcached?
+
+Memcached supports only simple key-value strings with no sorted set data structure. Implementing sliding-window counters would require application-level logic with multiple round trips and no atomic compound operations — resulting in race conditions under concurrent load. Memcached also lacks persistence, replication, and pub/sub.
+
+#### Why Not Cassandra / DynamoDB?
+
+Wide-column stores like Cassandra offer excellent write throughput but with **10–50ms latency** per operation — 10–50× slower than Redis. For a real-time scoring path that runs on every transaction, this latency is unacceptable. Cassandra's eventual consistency model with tunable quorum also introduces unnecessary complexity for a transient counter that benefits from AP behavior.
+
+#### Why Not a Relational Database?
+
+A relational database (PostgreSQL, MySQL) could store velocity data in a table with timestamp-indexed queries, but:
+- No native TTL / auto-expiry — requires a background cleanup job.
+- O(log N) range queries via B-tree indexes, but with connection overhead, query parsing, and disk I/O that adds 5–20ms per query.
+- An RDBMS is designed for durable, normalized records — velocity counters are ephemeral by nature.
+
+### 10.2 Neo4j — Graph Pattern Detection (Graph Database)
+
+#### Why Neo4j?
+
+| Factor | Neo4j Fit |
+|--------|-----------|
+| **Data type** | The fraud detection domain is inherently relational: users PERFORM transactions that USE devices and ORIGINATE from IPs. These are **entities connected by typed relationships** — the exact structure a property graph models natively. |
+| **Access pattern** | Every fraud pattern query traverses 2–3 relationship hops (e.g., `User → Transaction → Device → Transaction → User`). Neo4j's index-free adjacency makes multi-hop traversals O(hops × average degree) rather than O(N × join cost), and Cypher expresses these patterns declaratively. |
+| **Scalability** | Neo4j supports **Causal Clustering** (read replicas + core servers) for horizontal read scaling. Write throughput can be optimized with `MERGE` batching and schema constraints that enable index-backed lookups instead of full label scans. |
+| **Consistency** | Neo4j provides **ACID transactions per node** and causal consistency across a cluster. For fraud detection, write-after-write consistency is essential — a transaction written in step 1 must be visible in the pattern query in step 2 of the same request. Neo4j guarantees this within a single session. |
+
+#### Why Not a Relational Database with JOINs?
+
+The core fraud patterns require multi-hop traversals:
+- "Find all users who share a device with the current user" = User → Transaction → Device → Transaction → User (4 hops, 3 JOINs).
+- In a relational database, this requires self-joins on the transaction table with device_id as the join key. At 10M+ transactions, this becomes prohibitively expensive (O(N²) for the cross-product) without heavy denormalization.
+- Neo4j's index-free adjacency makes the same query O(k) where k is the number of edges — independent of total graph size.
+
+#### Why Not MongoDB (Document Store)?
+
+MongoDB excels at storing nested, hierarchical documents. Fraud pattern detection requires **cross-referencing between independent entities** (users, devices, IPs) — a fundamentally relational problem. Implementing graph traversals in MongoDB requires `$lookup` aggregation pipelines, which are essentially server-side JOINs with O(N×M) cost and no adjacency index.
+
+#### Why Not Amazon Neptune / JanusGraph?
+
+Neptune and JanusGraph are viable graph databases but:
+- Neptune is AWS-only, creating vendor lock-in.
+- JanusGraph requires a separate storage backend (Cassandra/HBase) and indexing backend (Elasticsearch), adding operational complexity.
+- Neo4j's native storage engine, first-party Cypher language, and mature async Python driver (`neo4j` package) make it the most productive choice for a Python/FastAPI stack.
+
+### 10.3 Selection Summary
+
+| Requirement | Redis | Neo4j |
+|-------------|-------|-------|
+| **Primary use case** | Sliding-window velocity counters | Relationship-based fraud pattern detection |
+| **Data model** | Sorted sets (key → {member: score}) | Property graph (nodes + typed relationships) |
+| **CAP position** | AP (Availability + Partition tolerance) | CA (Consistency + Availability), ACID per transaction |
+| **Latency** | Sub-millisecond | Low-millisecond (2–3 hop traversals) |
+| **Persistence** | AOF (`--appendonly yes`) | Native B+ tree storage with WAL |
+| **Horizontal scaling** | Redis Cluster (hash-slot sharding) | Causal Cluster (read replicas) |
+| **Why not alternatives** | Memcached (no sorted sets), Cassandra (too slow), RDBMS (no TTL, high overhead) | RDBMS (expensive JOINs), MongoDB (no adjacency index), Neptune (vendor lock-in) |
