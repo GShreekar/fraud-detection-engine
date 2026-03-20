@@ -277,6 +277,8 @@ async def test_analyze_rejects_non_json_body():
 @pytest.mark.asyncio
 async def test_analyze_clean_transaction_returns_allow():
     """A completely clean transaction should return ALLOW with score 0.0."""
+    from datetime import datetime
+
     payload = {
         "transaction_id": "txn_clean",
         "user_id": "user_clean",
@@ -285,6 +287,7 @@ async def test_analyze_clean_transaction_returns_allow():
         "device_id": "device_clean",
         "ip_address": "10.0.0.1",
         "country": "US",
+        "timestamp": datetime(2026, 3, 20, 14, 0, 0).isoformat(),
     }
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
