@@ -8,6 +8,12 @@ from app.services.velocity import VelocityService
 
 router = APIRouter()
 
+fraud_engine = FraudEngine(
+    rules_service=RulesService(),
+    velocity_service=VelocityService(),
+    graph_service=GraphService(),
+)
+
 
 def get_fraud_engine() -> FraudEngine:
     """
@@ -19,15 +25,7 @@ def get_fraud_engine() -> FraudEngine:
     - Separation of concerns
     - Explicit dependency declaration
     """
-    rules_service = RulesService()
-    velocity_service = VelocityService()
-    graph_service = GraphService()
-
-    return FraudEngine(
-        rules_service=rules_service,
-        velocity_service=velocity_service,
-        graph_service=graph_service,
-    )
+    return fraud_engine
 
 
 @router.post("/transactions/analyze", response_model=FraudScoreResponse)

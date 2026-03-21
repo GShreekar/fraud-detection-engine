@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     NEO4J_DATABASE: str = "neo4j"
     NEO4J_MAX_CONNECTION_POOL_SIZE: int = 50
     NEO4J_CONNECTION_TIMEOUT: int = 5
+    # Maximum seconds to wait for each graph operation before failing safe
+    NEO4J_OPERATION_TIMEOUT_SECONDS: float = 2.5
 
     # --- Velocity checks (Phase 3) ---
     # Sliding window duration in seconds
@@ -31,7 +33,7 @@ class Settings(BaseSettings):
     # Maximum transactions within the window before a score is returned (per dimension)
     VELOCITY_MAX_TRANSACTIONS: int = 10
     VELOCITY_MAX_TRANSACTIONS_USER: int = 10
-    VELOCITY_MAX_TRANSACTIONS_IP: int = 10
+    VELOCITY_MAX_TRANSACTIONS_IP: int = 5
     VELOCITY_MAX_TRANSACTIONS_DEVICE: int = 10
     # Country-change detection TTL (24 hours)
     VELOCITY_COUNTRY_CACHE_TTL_SECONDS: int = 86400
@@ -65,11 +67,17 @@ class Settings(BaseSettings):
     GRAPH_MERCHANT_RING_WINDOW_HOURS: int = 24
     # Rolling time-window filter to ignore stale graph signals (days)
     GRAPH_TIME_WINDOW_DAYS: int = 30
+    # Toggle account-takeover signal based on first-seen device for established users
+    GRAPH_ENABLE_NEW_DEVICE_FOR_USER: bool = False
 
     # --- FraudEngine score weights (Phase 5) — must sum to 1.0 ---
     WEIGHT_RULES: float = 0.50
     WEIGHT_VELOCITY: float = 0.25
     WEIGHT_GRAPH: float = 0.25
+
+    # --- Health checks ---
+    # Fail-fast timeout for dependency probes used by /health
+    HEALTH_PROBE_TIMEOUT_SECONDS: float = 1.0
 
     model_config = SettingsConfigDict(env_file=".env")
 

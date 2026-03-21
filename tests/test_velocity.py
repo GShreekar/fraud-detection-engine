@@ -72,7 +72,7 @@ async def test_user_velocity_triggers_when_threshold_exceeded(
     txn = _make_transaction(transaction_id="txn_trigger")
     score, reason = await velocity_service._check_user_velocity(fake_redis, txn)
     assert score == VELOCITY_USER_SCORE
-    assert reason == "velocity_user_exceeded"
+    assert reason == "user_velocity"
 
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_ip_velocity_triggers_when_threshold_exceeded(
     txn = _make_transaction(transaction_id="txn_ip_trigger", user_id="user_trigger")
     score, reason = await velocity_service._check_ip_velocity(fake_redis, txn)
     assert score == VELOCITY_IP_SCORE
-    assert reason == "velocity_ip_exceeded"
+    assert reason == "ip_velocity"
 
 
 # ── evaluate() ─────────────────────────────────────────────────────
@@ -151,7 +151,7 @@ async def test_evaluate_triggers_user_velocity(
         score, reasons = await velocity_service.evaluate(txn)
 
     assert score > 0.0
-    assert "velocity_user_exceeded" in reasons
+    assert "user_velocity" in reasons
 
 
 @pytest.mark.asyncio
@@ -181,7 +181,7 @@ async def test_evaluate_caps_score_at_one(
         score, reasons = await velocity_service.evaluate(txn)
 
     assert score <= 1.0
-    assert "velocity_user_exceeded" in reasons
+    assert "user_velocity" in reasons
 
 
 # ── sliding window expiry ──────────────────────────────────────────
@@ -244,7 +244,7 @@ async def test_device_velocity_triggers_when_threshold_exceeded(
     txn = _make_transaction(transaction_id="txn_dev_trigger")
     score, reason = await velocity_service._check_device_velocity(fake_redis, txn)
     assert score == VELOCITY_DEVICE_SCORE
-    assert reason == "velocity_device_exceeded"
+    assert reason == "device_velocity"
 
 
 # ── _check_country_change ─────────────────────────────────────────
@@ -289,7 +289,7 @@ async def test_country_change_triggers_different_country(
     await velocity_service._check_country_change(fake_redis, txn_us)
     score, reason = await velocity_service._check_country_change(fake_redis, txn_gb)
     assert score == VELOCITY_COUNTRY_CHANGE_SCORE
-    assert reason == "user_country_changed"
+    assert reason == "country_change"
 
 
 @pytest.mark.asyncio

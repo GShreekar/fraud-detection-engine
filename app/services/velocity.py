@@ -39,10 +39,21 @@ class VelocityService:
                 )
                 return 0.0, []
 
+            user_velocity = await self._check_user_velocity(redis, transaction)
+            ip_velocity = await self._check_ip_velocity(redis, transaction)
+            device_velocity = await self._check_device_velocity(redis, transaction)
+
+            # Use one primary burst dimension to avoid over-penalizing the same event.
+            primary_velocity: tuple[float, str | None] = (0.0, None)
+            if user_velocity[1] is not None:
+                primary_velocity = user_velocity
+            elif device_velocity[1] is not None:
+                primary_velocity = device_velocity
+            elif ip_velocity[1] is not None:
+                primary_velocity = ip_velocity
+
             checks = [
-                await self._check_user_velocity(redis, transaction),
-                await self._check_ip_velocity(redis, transaction),
-                await self._check_device_velocity(redis, transaction),
+                primary_velocity,
                 await self._check_country_change(redis, transaction),
                 await self._check_amount_spike(redis, transaction),
             ]
@@ -70,7 +81,7 @@ class VelocityService:
         key = f"velocity:user:{transaction.user_id}"
         count = await self._sliding_window_count(redis, key, transaction)
         if count > settings.VELOCITY_MAX_TRANSACTIONS_USER:
-            return VELOCITY_USER_SCORE, "velocity_user_exceeded"
+            return VELOCITY_USER_SCORE, "user_velocity"
         return 0.0, None
 
     async def _check_ip_velocity(
@@ -80,7 +91,7 @@ class VelocityService:
         key = f"velocity:ip:{transaction.ip_address}"
         count = await self._sliding_window_count(redis, key, transaction)
         if count > settings.VELOCITY_MAX_TRANSACTIONS_IP:
-            return VELOCITY_IP_SCORE, "velocity_ip_exceeded"
+            return VELOCITY_IP_SCORE, "ip_velocity"
         return 0.0, None
 
     async def _check_device_velocity(
@@ -90,7 +101,7 @@ class VelocityService:
         key = f"velocity:device:{transaction.device_id}"
         count = await self._sliding_window_count(redis, key, transaction)
         if count > settings.VELOCITY_MAX_TRANSACTIONS_DEVICE:
-            return VELOCITY_DEVICE_SCORE, "velocity_device_exceeded"
+            return VELOCITY_DEVICE_SCORE, "device_velocity"
         return 0.0, None
 
     async def _check_country_change(
@@ -108,7 +119,7 @@ class VelocityService:
         )
 
         if last_country is not None and last_country != transaction.country:
-            return VELOCITY_COUNTRY_CHANGE_SCORE, "user_country_changed"
+            return VELOCITY_COUNTRY_CHANGE_SCORE, "country_change"
         return 0.0, None
 
     async def _check_amount_spike(

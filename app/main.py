@@ -1,10 +1,12 @@
 import logging
 import uuid
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.config import settings
 from app.db.neo4j_client import close_neo4j, connect_neo4j, get_driver
 from app.db.redis_client import close_redis, connect_redis, get_redis
 from app.routes import transaction
@@ -95,7 +97,10 @@ async def health_check():
     try:
         redis = get_redis()
         if redis is not None:
-            await redis.ping()
+            await asyncio.wait_for(
+                redis.ping(),
+                timeout=settings.HEALTH_PROBE_TIMEOUT_SECONDS,
+            )
             redis_ok = True
     except Exception:
         pass
@@ -104,7 +109,10 @@ async def health_check():
     try:
         driver = get_driver()
         if driver is not None:
-            await driver.verify_connectivity()
+            await asyncio.wait_for(
+                driver.verify_connectivity(),
+                timeout=settings.HEALTH_PROBE_TIMEOUT_SECONDS,
+            )
             neo4j_ok = True
     except Exception:
         pass

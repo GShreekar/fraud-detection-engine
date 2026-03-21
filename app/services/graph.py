@@ -91,9 +91,9 @@ class GraphService:
                 return 0.0, []
 
             async with driver.session(database=settings.NEO4J_DATABASE) as session:
-                await self._write_transaction(session, transaction)
-                return await self._query_patterns(
-                    session, transaction
+                return await asyncio.wait_for(
+                    self._evaluate_in_session(session, transaction),
+                    timeout=settings.NEO4J_OPERATION_TIMEOUT_SECONDS,
                 )
         except Exception as exc:
             logger.warning(
@@ -104,6 +104,15 @@ class GraphService:
                 },
             )
             return 0.0, []
+
+    async def _evaluate_in_session(
+        self,
+        session,
+        transaction: TransactionRequest,
+    ) -> tuple[float, list[str]]:
+        """Execute write and query phases using a single Neo4j session."""
+        await self._write_transaction(session, transaction)
+        return await self._query_patterns(session, transaction)
 
     async def _write_transaction(
         self, session, transaction: TransactionRequest
@@ -139,13 +148,15 @@ class GraphService:
     async def _query_patterns(
         self, session, transaction: TransactionRequest
     ) -> tuple[float, list[str]]:
-        """Run all fraud pattern queries concurrently and return aggregated results."""
-        checks = await asyncio.gather(
-            self._check_shared_device(session, transaction),
-            self._check_ip_cluster(session, transaction),
-            self._check_merchant_ring(session, transaction),
-            self._check_new_device_for_user(session, transaction),
-        )
+        """Run all fraud pattern queries and return aggregated results."""
+        checks: list[tuple[float, str | None]] = [
+            await self._check_shared_device(session, transaction),
+            await self._check_ip_cluster(session, transaction),
+            await self._check_merchant_ring(session, transaction),
+        ]
+
+        if settings.GRAPH_ENABLE_NEW_DEVICE_FOR_USER:
+            checks.append(await self._check_new_device_for_user(session, transaction))
 
         total_score = 0.0
         reasons: list[str] = []
@@ -176,7 +187,7 @@ class GraphService:
 
         score = self._score_shared_device(user_count)
         if score > 0.0:
-            return score, "shared_device_ring"
+            return score, "shared_device"
         return 0.0, None
 
     async def _check_ip_cluster(
@@ -235,8 +246,11 @@ class GraphService:
             return 0.0, None
 
         query = """
-        MATCH (u:User {user_id: $user_id})-[:PERFORMED]->(:Transaction)-[:USED_DEVICE]->(d:Device {device_id: $device_id})
-        RETURN count(*) AS prior_uses
+        MATCH (u:User {user_id: $user_id})-[:PERFORMED]->(:Transaction)-[:USED_DEVICE]->(d:Device)
+        RETURN
+          count(*) AS total_uses,
+          count(DISTINCT d.device_id) AS distinct_devices,
+          sum(CASE WHEN d.device_id = $device_id THEN 1 ELSE 0 END) AS current_device_uses
         """
         result = await session.run(
             query,
@@ -244,11 +258,20 @@ class GraphService:
             device_id=transaction.device_id,
         )
         record = await result.single()
-        prior_uses = record["prior_uses"] if record else 0
+        total_uses = record["total_uses"] if record else 0
+        distinct_devices = record["distinct_devices"] if record else 0
+        current_device_uses = record["current_device_uses"] if record else 0
 
-        # prior_uses includes the transaction we just wrote; if it's the first time
-        # the count will be exactly 1 (only the current transaction)
-        if prior_uses <= 1:
+        # After write-phase, the current transaction is included in these counts.
+        # Trigger only when:
+        # - user has prior history (more than just this transaction),
+        # - user has now used multiple distinct devices,
+        # - current device appears exactly once (first seen now).
+        if (
+            total_uses > 1
+            and distinct_devices > 1
+            and current_device_uses == 1
+        ):
             return NEW_DEVICE_FOR_USER_SCORE, "new_device_for_user"
         return 0.0, None
 

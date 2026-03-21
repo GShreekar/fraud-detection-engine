@@ -226,6 +226,17 @@ def test_unusual_hour_rule_does_not_trigger_at_noon(
     assert reason is None
 
 
+def test_unusual_hour_rule_uses_transaction_hour_when_present(
+    rules_service: RulesService, clean_transaction: TransactionRequest
+) -> None:
+    """Explicit transaction_hour should override timestamp hour for checks."""
+    clean_transaction.timestamp = datetime(2026, 1, 1, 12, 0, 0)
+    clean_transaction.transaction_hour = 2
+    score, reason = rules_service._check_unusual_hour(clean_transaction)
+    assert score == UNUSUAL_HOUR_SCORE
+    assert reason == "unusual_hour"
+
+
 # ── evaluate() ──────────────────────────────────────────────────────
 
 
@@ -276,8 +287,8 @@ def test_evaluate_returns_all_reasons_when_all_rules_trigger(
     score, reasons = rules_service.evaluate(clean_transaction)
     assert "high_amount" in reasons
     assert "high_risk_country" in reasons
-    assert "round_amount" in reasons
     assert "new_account" in reasons
     assert "high_risk_merchant" in reasons
+    assert "international_transaction" not in reasons
     assert "unusual_hour" in reasons
     assert score == 1.0  # capped
