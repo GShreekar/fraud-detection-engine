@@ -19,6 +19,8 @@ pipeline {
         REGISTRY = 'docker.io'
         REGISTRY_REPO = "${REGISTRY}/${params.DOCKER_REPOSITORY}"
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+        HAS_DOCKER = 'false'
+        PYTHON_BIN = ''
     }
 
     options {
@@ -34,10 +36,30 @@ pipeline {
             }
         }
 
+        stage('Detect Docker') {
+            steps {
+                script {
+                    env.HAS_DOCKER = sh(script: 'command -v docker >/dev/null 2>&1 && echo true || echo false', returnStdout: true).trim()
+                    env.PYTHON_BIN = sh(
+                        script: 'command -v python3 || command -v python || command -v python3.12 || true',
+                        returnStdout: true
+                    ).trim()
+                    if (!env.PYTHON_BIN) {
+                        error('No Python interpreter found on this Jenkins agent')
+                    }
+                    echo "Docker available: ${env.HAS_DOCKER}"
+                    echo "Python interpreter: ${env.PYTHON_BIN}"
+                }
+            }
+        }
+
         stage('Run Tests') {
             steps {
                 sh 'mkdir -p reports'
-                sh 'docker run --rm -v "$PWD:/app" -w /app python:3.12-slim sh -lc "pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt && pytest tests/ -v --junitxml=reports/test-results.xml"'
+                sh '"${PYTHON_BIN}" -m venv .venv'
+                sh '.venv/bin/python -m pip install --upgrade pip'
+                sh '.venv/bin/pip install -r requirements.txt'
+                sh '.venv/bin/pytest tests/ -v --junitxml=reports/test-results.xml'
             }
             post {
                 always {
@@ -47,6 +69,9 @@ pipeline {
         }
 
         stage('Build Docker Image') {
+            when {
+                expression { return env.HAS_DOCKER == 'true' }
+            }
             steps {
                 sh 'docker build -f docker/Dockerfile -t ${IMAGE_NAME}:${BUILD_NUMBER} .'
                 sh 'docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY_REPO}:${BUILD_NUMBER}'
@@ -59,6 +84,7 @@ pipeline {
                 allOf {
                     branch 'main'
                     expression { return params.ENABLE_DOCKER_PUSH }
+                    expression { return env.HAS_DOCKER == 'true' }
                 }
             }
             steps {
