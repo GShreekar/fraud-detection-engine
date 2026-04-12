@@ -23,6 +23,24 @@ docker --version
 git --version
 ```
 
+## 1.1 Verify Jenkins Runtime Tools
+
+Jenkins must be able to run both Python and Docker commands.
+
+Run these checks inside the Jenkins runtime:
+
+```bash
+python3 --version
+docker --version
+```
+
+If either command is missing, install them in the Jenkins runtime or use a Jenkins agent image that already includes Python and Docker CLI.
+
+This project currently assumes a Jenkins runtime that can:
+1. Access the Docker socket.
+2. Run `python3`.
+3. Run `docker`.
+
 ## 2. Start Jenkins in Docker
 
 Run Jenkins as a container:
