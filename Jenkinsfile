@@ -73,7 +73,6 @@ pipeline {
                     )
                 ]) {
                     sh 'echo "$DOCKER_PASS" | docker login ${REGISTRY} -u "$DOCKER_USER" --password-stdin'
-                    sh 'docker push ${REGISTRY_REPO}:${BUILD_NUMBER}'
                     sh 'docker push ${REGISTRY_REPO}:latest'
                 }
             }
