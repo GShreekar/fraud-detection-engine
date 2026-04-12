@@ -21,6 +21,7 @@ pipeline {
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
         HAS_DOCKER = 'false'
         PYTHON_BIN = ''
+        UV_BIN = ''
     }
 
     options {
@@ -45,7 +46,20 @@ pipeline {
                         returnStdout: true
                     ).trim()
                     if (!env.PYTHON_BIN) {
-                        error('No Python interpreter found on this Jenkins agent')
+                        env.UV_BIN = sh(
+                            script: 'command -v uv || echo "$HOME/.local/bin/uv"',
+                            returnStdout: true
+                        ).trim()
+                        if (!fileExists(env.UV_BIN)) {
+                            if (sh(script: 'command -v curl >/dev/null 2>&1 && echo true || echo false', returnStdout: true).trim() == 'true') {
+                                sh 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+                            }
+                        }
+                        if (!fileExists(env.UV_BIN)) {
+                            error('No Python interpreter found and uv could not be bootstrapped on this Jenkins agent')
+                        }
+                        sh '"${UV_BIN}" python install 3.12'
+                        env.PYTHON_BIN = sh(script: '"${UV_BIN}" python find 3.12', returnStdout: true).trim()
                     }
                     echo "Docker available: ${env.HAS_DOCKER}"
                     echo "Python interpreter: ${env.PYTHON_BIN}"
