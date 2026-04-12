@@ -12,7 +12,7 @@ pipeline {
     environment {
         IMAGE_NAME = 'fraud-detection-engine'
         REGISTRY = 'docker.io'
-        REGISTRY_REPO = "${REGISTRY}/frauddetection/${IMAGE_NAME}"
+        REGISTRY_REPO = "${REGISTRY}/gshreekar/${IMAGE_NAME}"
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
     }
 
