@@ -25,7 +25,7 @@ Scores from each layer are aggregated by a central `FraudEngine` into a normaliz
 | Velocity  | Redis          | Sliding-window transaction frequency checks   |
 | Graph     | Neo4j          | Relationship-based fraud ring detection       |
 | Container | Docker Compose | Reproducible local and production environment |
-| CI/CD     | Jenkins        | Automated build, test, and image pipeline     |
+| CI/CD     | Optional       | Use your preferred CI platform for tests/build |
 
 ---
 
@@ -72,7 +72,6 @@ fraudDetectionEngine/
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
-├── Jenkinsfile
 └── README.md
 ```
 
@@ -107,6 +106,7 @@ uvicorn app.main:app --reload
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full system design — components, data flow, scoring model |
 | [SYSTEM_GUIDE.md](docs/SYSTEM_GUIDE.md) | Detailed end-to-end explanation of how the entire facility works |
 | [RUN_GUIDE.md](docs/RUN_GUIDE.md) | Complete instructions — local dev, Docker, testing, CI/CD, production |
+| [JENKINS_SETUP.md](docs/JENKINS_SETUP.md) | Full step-by-step Jenkins CI setup for this repo |
 | [IMPLEMENTATION.md](docs/IMPLEMENTATION.md) | Step-by-step phased build plan |
 | [DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) | Conventions, extension patterns, testing standards |
 | [API_REFERENCE.md](docs/API_REFERENCE.md) | Endpoint contracts, schemas, error codes |
@@ -122,7 +122,9 @@ pytest tests/ -v
 
 ---
 
-## Jenkins CI/CD
+## CI/CD
 
-The `Jenkinsfile` at the root defines a pipeline with stages: **Checkout → Install → Test → Docker Build**.
-See [DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) for the full CI/CD workflow.
+This project does not enforce a specific CI/CD vendor.
+Recommended baseline stages: **Checkout → Install → Test → Docker Build**.
+For Jenkins users, follow [JENKINS_SETUP.md](docs/JENKINS_SETUP.md).
+See [DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) for CI best practices.

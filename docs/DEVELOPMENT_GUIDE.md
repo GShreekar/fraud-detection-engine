@@ -359,7 +359,7 @@ Examples:
 
 ### Pull request rules
 - Every PR must have at least one passing test for the changed code.
-- No PR merges if the Jenkins pipeline fails.
+- No PR merges if CI checks fail.
 - PR description must reference which implementation phase it belongs to.
 
 ### What goes in a commit

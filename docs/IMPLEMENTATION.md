@@ -17,7 +17,7 @@ This document contains **no code**. It is a planning and sequencing guide.
 - [Phase 6 — Error Handling and Resilience](#phase-6--error-handling-and-resilience)
 - [Phase 7 — Testing](#phase-7--testing)
 - [Phase 8 — Docker and Local Stack](#phase-8--docker-and-local-stack)
-- [Phase 9 — Jenkins CI/CD](#phase-9--jenkins-cicd)
+- [Phase 9 — CI/CD Automation](#phase-9--cicd-automation)
 - [Phase Summary Table](#phase-summary-table)
 
 ---
@@ -255,14 +255,14 @@ The repository skeleton is in place. Every file exists with correct structure an
 
 ---
 
-## Phase 9 — Jenkins CI/CD
+## Phase 9 — CI/CD Automation
 
-**Goal:** Automate the full build, test, and image publishing pipeline through Jenkins.
+**Goal:** Automate the full build, test, and image publishing pipeline through your chosen CI tool.
 
 ### Tasks
 
-- [x] **Validate existing `Jenkinsfile`** — confirm all four stages (Checkout, Install, Test, Docker Build) run without errors.
-- [x] **Add Docker login stage** — authenticate to a container registry (Docker Hub or a private registry) using Jenkins credentials.
+- [x] **Validate CI pipeline config** — confirm all four stages (Checkout, Install, Test, Docker Build) run without errors.
+- [x] **Add Docker login stage** — authenticate to a container registry (Docker Hub or a private registry) using CI credentials.
 - [x] **Add image tagging** — tag the image with both `BUILD_NUMBER` and `latest`.
 - [x] **Add image push stage** — push the tagged image to the registry after a successful test run.
 - [x] **Add environment-specific deploy stage** — deploy to a staging environment (e.g., Docker host, Kubernetes, or a cloud VM) using SSH or a Kubernetes manifest.
@@ -291,4 +291,4 @@ The repository skeleton is in place. Every file exists with correct structure an
 | 6     | Error Handling            | Resilient API with structured logging                | Phase 5    |
 | 7     | Testing                   | Full test suite across all layers                    | 2, 3, 4, 5 |
 | 8     | Docker                    | Full stack running in Docker Compose                 | Phase 5    |
-| 9     | Jenkins CI/CD             | Automated pipeline with push and deploy              | 7, 8       |
+| 9     | CI/CD Automation          | Automated pipeline with push and deploy              | 7, 8       |

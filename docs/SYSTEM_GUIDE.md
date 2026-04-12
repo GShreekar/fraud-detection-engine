@@ -673,7 +673,7 @@ A `clean_transaction` fixture provides a default `TransactionRequest` that does 
 
 ### Pipeline Architecture
 
-The Jenkins pipeline (`Jenkinsfile`) implements a complete build-test-publish-deploy workflow:
+The CI pipeline implements a complete build-test-publish-deploy workflow:
 
 ```
 ┌───────────┐   ┌──────────┐   ┌──────────┐   ┌───────────┐   ┌──────────┐   ┌──────────┐   ┌────────┐
@@ -728,7 +728,7 @@ This is a development/MVP version. The following security measures are in place:
 | Input validation         | ✅ Implemented  | Pydantic enforces types and constraints |
 | Error masking            | ✅ Implemented  | No stack traces returned to callers     |
 | Structured logging       | ✅ Implemented  | All logs include request context        |
-| Credential management    | ✅ Implemented  | Jenkins credentials store for CI/CD     |
+| Credential management    | ✅ Implemented  | CI platform credentials/secrets store    |
 | Container isolation      | ✅ Implemented  | Docker network isolation                |
 | `.env` excluded from Git | ✅ Implemented  | `.gitignore` blocks `.env` files        |
 

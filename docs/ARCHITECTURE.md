@@ -306,9 +306,9 @@ Service discovery uses Docker's internal DNS — the API container connects to `
 
 A single-stage, minimal image based on `python:3.12-slim`. It installs dependencies from `requirements.txt` and starts `uvicorn`. No development tools are included in the image.
 
-### Jenkins Pipeline
+### CI Pipeline
 
-The `Jenkinsfile` defines four stages:
+Use any CI platform with this baseline pipeline:
 
 | Stage             | Action                                       |
 |-------------------|----------------------------------------------|
@@ -317,7 +317,7 @@ The `Jenkinsfile` defines four stages:
 | Test              | `pytest tests/ -v`                           |
 | Docker Build      | `docker build -f docker/Dockerfile ...`      |
 
-A deploy stage is reserved for future extension (push to registry, deploy to cloud).
+Deploy can be added as an optional stage for registry push and release automation.
 
 ---
 

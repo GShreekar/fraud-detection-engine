@@ -12,7 +12,7 @@ Complete instructions for running the Fraud Detection Engine in every environmen
 4. [Running with Docker Compose (Full Stack)](#4-running-with-docker-compose-full-stack)
 5. [Running Tests](#5-running-tests)
 6. [Making API Requests](#6-making-api-requests)
-7. [Jenkins CI/CD Pipeline](#7-jenkins-cicd-pipeline)
+7. [CI/CD Pipeline](#7-cicd-pipeline)
 8. [Production Deployment](#8-production-deployment)
 9. [Troubleshooting](#9-troubleshooting)
 
@@ -34,7 +34,7 @@ Complete instructions for running the Fraud Detection Engine in every environmen
 
 | Software  | Version | Purpose                          |
 |-----------|---------|----------------------------------|
-| Jenkins   | 2.400+  | CI/CD pipeline automation        |
+| Any CI tool | latest | Pipeline automation (optional) |
 
 ### Verify Your Environment
 
@@ -412,11 +412,11 @@ After the 11th request, `"velocity_user_exceeded"` and/or `"velocity_ip_exceeded
 
 ---
 
-## 7. Jenkins CI/CD Pipeline
+## 7. CI/CD Pipeline
 
 ### Pipeline Overview
 
-The `Jenkinsfile` defines a declarative pipeline with seven stages:
+Use a CI pipeline with these stages:
 
 ```
 Checkout → Install Dependencies → Run Tests → Build Docker Image → Docker Login → Push Docker Image → Deploy
@@ -426,13 +426,13 @@ Checkout → Install Dependencies → Run Tests → Build Docker Image → Docke
 
 | Stage                  | What It Does                                                       | Runs On         |
 |------------------------|--------------------------------------------------------------------|-----------------|
-| **Checkout**           | Clones the repository, sets GitHub commit status to `pending`      | All branches    |
+| **Checkout**           | Clones the repository                                               | All branches    |
 | **Install Dependencies** | Installs Python packages from `requirements.txt`                | All branches    |
 | **Run Tests**          | Runs `pytest` with JUnit XML; publishes test results               | All branches    |
 | **Build Docker Image** | Builds the Docker image, tags with `BUILD_NUMBER` and `latest`     | All branches    |
-| **Docker Login**       | Authenticates to Docker Hub using Jenkins credentials              | All branches    |
+| **Docker Login**       | Authenticates to Docker Hub (optional)                             | All branches    |
 | **Push Docker Image**  | Pushes both image tags to the registry                             | All branches    |
-| **Deploy**             | SSHs into target host and deploys the container                    | `main` only     |
+| **Deploy**             | Deploys the container (optional)                                   | `main` only     |
 
 ### Branch Policies
 
@@ -446,51 +446,31 @@ Checkout → Install Dependencies → Run Tests → Build Docker Image → Docke
 |--------------|----------|-------------|------------------------------------|
 | `DEPLOY_ENV` | Choice   | `staging`   | Target environment: `staging` or `production` |
 
-### Jenkins Credentials Required
+### CI Credentials Required
 
-You must configure these credentials in Jenkins before running the pipeline:
+If you enable push/deploy in CI, configure credentials in your chosen CI system:
 
-| Credential ID            | Type              | Purpose                       |
-|--------------------------|-------------------|-------------------------------|
-| `dockerhub-credentials`  | Username/Password | Docker Hub registry login     |
-| `deploy-ssh-credentials` | SSH Username with Private Key | SSH access to deployment hosts |
+| Credential Name         | Type              | Purpose                       |
+|-------------------------|-------------------|-------------------------------|
+| Docker registry auth    | Username/Password | Docker registry login         |
+| Deploy SSH key          | SSH private key   | SSH access to deployment host |
 
-### Jenkins Plugins Required
+### Setting Up a CI Job
 
-| Plugin                         | Purpose                               |
-|--------------------------------|---------------------------------------|
-| Pipeline                       | Declarative pipeline support          |
-| Git                            | SCM checkout                          |
-| Docker Pipeline                | Docker build/push from pipeline       |
-| JUnit                          | Test result publishing                |
-| Email Extension                | Failure notification emails           |
-| Slack Notification             | Failure notification to Slack         |
-| GitHub                         | Commit status reporting               |
-| SSH Agent                      | SSH key forwarding for deploy stage   |
-| Credentials Binding            | Secure credential injection           |
-
-### Setting Up the Jenkins Job
-
-1. **Create a Multibranch Pipeline** job in Jenkins.
-2. **Add your Git repository** as the branch source.
-3. **Configure credentials:**
-   - Go to Jenkins → Manage Jenkins → Credentials.
-   - Add `dockerhub-credentials` (Username/Password for Docker Hub).
-   - Add `deploy-ssh-credentials` (SSH key for deployment target).
-4. **Set environment variables** on the Jenkins node or in the job configuration:
-   - `STAGING_HOST` — hostname/IP of the staging deployment target.
-   - `PRODUCTION_HOST` — hostname/IP of the production deployment target.
-5. **Run the pipeline** — Jenkins will discover branches and run automatically.
+1. Create a pipeline job in your CI platform.
+2. Connect your Git repository as the source.
+3. Configure build, test, and Docker stages.
+4. Add optional credentials for push/deploy.
+5. Run on all branches, and gate deploy to `main`.
 
 ### Failure Notifications
 
 On pipeline failure:
-- **Email** is sent to `team@frauddetection.dev` with the build log attached.
-- **Slack** message is posted to `#fraud-engine-ci` with a link to the failed build.
+- Send an email or chat alert (Slack/Teams) with a link to the failed run.
 
 ### Commit Status
 
-The pipeline reports `pending`, `success`, or `failure` status back to GitHub on every run, visible on pull requests and commits.
+The pipeline should report `pending`, `success`, or `failure` status back to GitHub on every run.
 
 ---
 
@@ -501,9 +481,9 @@ The pipeline reports `pending`, `success`, or `failure` status back to GitHub on
 - [ ] `.env` file is configured with production values on the target host.
 - [ ] Redis is running and accessible from the API container.
 - [ ] Neo4j is running and accessible from the API container.
-- [ ] Docker Hub credentials are configured in Jenkins.
+- [ ] Docker registry credentials are configured in your CI platform.
 - [ ] SSH access to the deployment host is configured.
-- [ ] `PRODUCTION_HOST` environment variable is set in Jenkins.
+- [ ] `PRODUCTION_HOST` environment variable is set in your CI platform.
 
 ### Environment File on Deployment Host
 
@@ -533,7 +513,7 @@ WEIGHT_VELOCITY=0.35
 WEIGHT_GRAPH=0.35
 ```
 
-### Manual Deployment (Without Jenkins)
+### Manual Deployment (Without CI)
 
 If you need to deploy without CI/CD:
 
