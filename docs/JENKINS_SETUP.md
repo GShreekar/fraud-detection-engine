@@ -9,6 +9,8 @@ The pipeline stages are:
 4. Build Docker Image
 5. Optional Push Docker Image (main branch only)
 
+The pipeline creates a local `.venv` in the Jenkins workspace and uses it for Python package installation and test execution.
+
 ## 1. Prerequisites
 
 Install or verify these tools on your machine:
@@ -40,6 +42,8 @@ This project currently assumes a Jenkins runtime that can:
 1. Access the Docker socket.
 2. Run `python3`.
 3. Run `docker`.
+
+It does not require system-wide Python packages; the pipeline creates a workspace virtual environment.
 
 ## 1.2 Verify Docker Socket Access
 

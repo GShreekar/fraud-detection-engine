@@ -31,15 +31,16 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'python3 -m pip install --upgrade pip'
-                sh 'python3 -m pip install -r requirements.txt'
+                sh 'python3 -m venv .venv'
+                sh '.venv/bin/python -m pip install --upgrade pip'
+                sh '.venv/bin/pip install -r requirements.txt'
             }
         }
 
         stage('Run Tests') {
             steps {
                 sh 'mkdir -p reports'
-                sh 'pytest tests/ -v --junitxml=reports/test-results.xml'
+                sh '.venv/bin/pytest tests/ -v --junitxml=reports/test-results.xml'
             }
             post {
                 always {
