@@ -7,12 +7,17 @@ pipeline {
             defaultValue: false,
             description: 'Push Docker image to registry (main branch only)'
         )
+        string(
+            name: 'DOCKER_REPOSITORY',
+            defaultValue: 'gshreekar/fraud-detection-engine',
+            description: 'Docker Hub repository in the format namespace/repo'
+        )
     }
 
     environment {
         IMAGE_NAME = 'fraud-detection-engine'
         REGISTRY = 'docker.io'
-        REGISTRY_REPO = "${REGISTRY}/frauddetection/${IMAGE_NAME}"
+        REGISTRY_REPO = "${REGISTRY}/${params.DOCKER_REPOSITORY}"
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
     }
 
