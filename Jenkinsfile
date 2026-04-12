@@ -14,6 +14,7 @@ pipeline {
         REGISTRY = 'docker.io'
         REGISTRY_REPO = "${REGISTRY}/frauddetection/${IMAGE_NAME}"
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+        PYTHON_DOCKER_IMAGE = 'python:3.12-slim'
     }
 
     options {
@@ -31,15 +32,14 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'python3 -m pip install --upgrade pip'
-                sh 'python3 -m pip install -r requirements.txt'
+                sh 'docker run --rm -v "$PWD":/workspace -w /workspace ${PYTHON_DOCKER_IMAGE} sh -lc "python -m pip install --upgrade pip && python -m pip install -r requirements.txt"'
             }
         }
 
         stage('Run Tests') {
             steps {
                 sh 'mkdir -p reports'
-                sh 'pytest tests/ -v --junitxml=reports/test-results.xml'
+                sh 'docker run --rm -v "$PWD":/workspace -w /workspace ${PYTHON_DOCKER_IMAGE} sh -lc "python -m pip install --upgrade pip && python -m pip install -r requirements.txt && pytest tests/ -v --junitxml=reports/test-results.xml"'
             }
             post {
                 always {
