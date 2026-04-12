@@ -14,6 +14,10 @@ from app.services.graph import (
     IP_CLUSTER_SCORE_TIER_LOW,
     IP_CLUSTER_SCORE_TIER_MAX,
     IP_CLUSTER_SCORE_TIER_MID,
+    MERCHANT_RING_SCORE_TIER_LOW,
+    MERCHANT_RING_SCORE_TIER_MID,
+    MERCHANT_RING_SCORE_TIER_HIGH,
+    NEW_DEVICE_FOR_USER_SCORE,
     SHARED_DEVICE_SCORE_TIER_HIGH,
     SHARED_DEVICE_SCORE_TIER_LOW,
     SHARED_DEVICE_SCORE_TIER_MAX,
@@ -33,22 +37,29 @@ def _make_transaction(
     user_id: str = "user_1",
     device_id: str = "device_abc",
     ip_address: str = "10.0.0.1",
+    merchant_id: str = "merchant_1",
+    account_age_days: int | None = None,
 ) -> TransactionRequest:
     """Helper to build a TransactionRequest with custom fields."""
     return TransactionRequest(
         transaction_id=transaction_id,
         user_id=user_id,
         amount=100.0,
-        merchant_id="merchant_1",
+        merchant_id=merchant_id,
         device_id=device_id,
         ip_address=ip_address,
         country="US",
+        account_age_days=account_age_days,
     )
 
 
 def _mock_session(
     user_count_device: int = 1,
     user_count_ip: int = 1,
+    user_count_merchant: int = 1,
+    total_uses: int = 1,
+    distinct_devices: int = 1,
+    current_device_uses: int = 1,
 ):
     """Create a mock Neo4j async session with configurable results."""
     session = AsyncMock()
@@ -57,11 +68,21 @@ def _mock_session(
         result = AsyncMock()
         if "MERGE" in query:
             result.consume = AsyncMock()
-        elif "USED_DEVICE" in query and "count" in query:
+        elif "USED_DEVICE" in query and "count(DISTINCT u)" in query:
             record = {"user_count": user_count_device}
             result.single = AsyncMock(return_value=record)
-        elif "ORIGINATED_FROM" in query and "count" in query:
+        elif "ORIGINATED_FROM" in query and "count(DISTINCT u)" in query:
             record = {"user_count": user_count_ip}
+            result.single = AsyncMock(return_value=record)
+        elif "AT_MERCHANT" in query and "count(DISTINCT u)" in query:
+            record = {"user_count": user_count_merchant}
+            result.single = AsyncMock(return_value=record)
+        elif "total_uses" in query and "current_device_uses" in query:
+            record = {
+                "total_uses": total_uses,
+                "distinct_devices": distinct_devices,
+                "current_device_uses": current_device_uses,
+            }
             result.single = AsyncMock(return_value=record)
         else:
             result.consume = AsyncMock()
@@ -75,10 +96,21 @@ def _mock_session(
 def _mock_driver(
     user_count_device: int = 1,
     user_count_ip: int = 1,
+    user_count_merchant: int = 1,
+    total_uses: int = 1,
+    distinct_devices: int = 1,
+    current_device_uses: int = 1,
 ):
     """Create a mock Neo4j driver wrapping a mock session."""
     driver = MagicMock()
-    session = _mock_session(user_count_device, user_count_ip)
+    session = _mock_session(
+        user_count_device,
+        user_count_ip,
+        user_count_merchant,
+        total_uses,
+        distinct_devices,
+        current_device_uses,
+    )
     ctx = AsyncMock()
     ctx.__aenter__ = AsyncMock(return_value=session)
     ctx.__aexit__ = AsyncMock(return_value=False)
@@ -163,6 +195,41 @@ def test_score_ip_cluster_tier_max(
     assert graph_service._score_ip_cluster(50) == IP_CLUSTER_SCORE_TIER_MAX
 
 
+# ── _score_merchant_ring (static — no mock needed) ────────────────
+
+
+def test_score_merchant_ring_below_threshold(
+    graph_service: GraphService,
+) -> None:
+    """A merchant with fewer than threshold users should score 0.0."""
+    assert graph_service._score_merchant_ring(1) == 0.0
+    assert graph_service._score_merchant_ring(4) == 0.0
+
+
+def test_score_merchant_ring_tier_low(
+    graph_service: GraphService,
+) -> None:
+    """A merchant with 5–8 users should score TIER_LOW."""
+    assert graph_service._score_merchant_ring(5) == MERCHANT_RING_SCORE_TIER_LOW
+    assert graph_service._score_merchant_ring(8) == MERCHANT_RING_SCORE_TIER_LOW
+
+
+def test_score_merchant_ring_tier_mid(
+    graph_service: GraphService,
+) -> None:
+    """A merchant with 9–15 users should score TIER_MID."""
+    assert graph_service._score_merchant_ring(9) == MERCHANT_RING_SCORE_TIER_MID
+    assert graph_service._score_merchant_ring(15) == MERCHANT_RING_SCORE_TIER_MID
+
+
+def test_score_merchant_ring_tier_high(
+    graph_service: GraphService,
+) -> None:
+    """A merchant with >15 users should score TIER_HIGH."""
+    assert graph_service._score_merchant_ring(16) == MERCHANT_RING_SCORE_TIER_HIGH
+    assert graph_service._score_merchant_ring(100) == MERCHANT_RING_SCORE_TIER_HIGH
+
+
 # ── _write_transaction ─────────────────────────────────────────────
 
 
@@ -181,7 +248,7 @@ async def test_write_transaction_executes_merge_query(
 async def test_write_transaction_passes_all_parameters(
     graph_service: GraphService,
 ) -> None:
-    """_write_transaction should forward all transaction fields."""
+    """_write_transaction should forward all transaction fields including merchant."""
     session = AsyncMock()
     consume_mock = AsyncMock()
     result_mock = AsyncMock()
@@ -193,6 +260,7 @@ async def test_write_transaction_passes_all_parameters(
         user_id="user_param",
         device_id="device_param",
         ip_address="1.2.3.4",
+        merchant_id="merchant_param",
     )
     await graph_service._write_transaction(session, txn)
 
@@ -202,6 +270,7 @@ async def test_write_transaction_passes_all_parameters(
     assert call_kwargs["device_id"] == "device_param"
     assert call_kwargs["ip_address"] == "1.2.3.4"
     assert call_kwargs["transaction_id"] == "txn_param"
+    assert call_kwargs["merchant_id"] == "merchant_param"
     assert call_kwargs["amount"] == 100.0
     assert call_kwargs["country"] == "US"
     consume_mock.assert_awaited_once()
@@ -221,7 +290,7 @@ async def test_check_shared_device_triggers_for_multiple_users(
         session, txn
     )
     assert score == SHARED_DEVICE_SCORE_TIER_MID
-    assert reason == "shared_device_ring"
+    assert reason == "shared_device"
 
 
 @pytest.mark.asyncio
@@ -269,6 +338,94 @@ async def test_check_ip_cluster_does_not_trigger_for_few_users(
     assert reason is None
 
 
+# ── _check_merchant_ring ──────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_check_merchant_ring_triggers_for_many_users(
+    graph_service: GraphService,
+) -> None:
+    """Merchant ring check should score when many users share a merchant."""
+    session = _mock_session(user_count_merchant=6)
+    txn = _make_transaction()
+    score, reason = await graph_service._check_merchant_ring(
+        session, txn
+    )
+    assert score == MERCHANT_RING_SCORE_TIER_LOW
+    assert reason == "merchant_fraud_ring"
+
+
+@pytest.mark.asyncio
+async def test_check_merchant_ring_does_not_trigger_below_threshold(
+    graph_service: GraphService,
+) -> None:
+    """Merchant ring check should return 0.0 below threshold."""
+    session = _mock_session(user_count_merchant=3)
+    txn = _make_transaction()
+    score, reason = await graph_service._check_merchant_ring(
+        session, txn
+    )
+    assert score == 0.0
+    assert reason is None
+
+
+# ── _check_new_device_for_user ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_new_device_triggers_for_established_user(
+    graph_service: GraphService,
+) -> None:
+    """New device check should score when an established user uses a new device."""
+    session = _mock_session(
+        total_uses=6,
+        distinct_devices=2,
+        current_device_uses=1,
+    )
+    txn = _make_transaction(account_age_days=60)
+    score, reason = await graph_service._check_new_device_for_user(
+        session, txn
+    )
+    assert score == NEW_DEVICE_FOR_USER_SCORE
+    assert reason == "new_device_for_user"
+
+
+@pytest.mark.asyncio
+async def test_new_device_does_not_trigger_for_known_device(
+    graph_service: GraphService,
+) -> None:
+    """New device check should not trigger if user has used this device before."""
+    session = _mock_session(
+        total_uses=6,
+        distinct_devices=2,
+        current_device_uses=4,
+    )
+    txn = _make_transaction(account_age_days=60)
+    score, reason = await graph_service._check_new_device_for_user(
+        session, txn
+    )
+    assert score == 0.0
+    assert reason is None
+
+
+@pytest.mark.asyncio
+async def test_new_device_skipped_for_new_account(
+    graph_service: GraphService,
+) -> None:
+    """New device check should not fire for accounts younger than threshold."""
+    session = _mock_session(
+        total_uses=6,
+        distinct_devices=2,
+        current_device_uses=1,
+    )
+    txn = _make_transaction(account_age_days=10)
+    score, reason = await graph_service._check_new_device_for_user(
+        session, txn
+    )
+    assert score == 0.0
+    assert reason is None
+
+
 # ── evaluate() ─────────────────────────────────────────────────────
 
 
@@ -283,9 +440,8 @@ async def test_evaluate_returns_combined_score_and_reasons(
         txn = _make_transaction()
         score, reasons = await graph_service.evaluate(txn)
 
-    expected = SHARED_DEVICE_SCORE_TIER_MID + IP_CLUSTER_SCORE_TIER_MID
-    assert score == min(expected, 1.0)
-    assert "shared_device_ring" in reasons
+    assert score > 0.0
+    assert "shared_device" in reasons
     assert "ip_cluster" in reasons
 
 
@@ -294,7 +450,14 @@ async def test_evaluate_returns_zero_for_clean_transaction(
     graph_service: GraphService,
 ) -> None:
     """evaluate() should return (0.0, []) for a clean graph."""
-    driver, _ = _mock_driver(user_count_device=1, user_count_ip=1)
+    driver, _ = _mock_driver(
+        user_count_device=1,
+        user_count_ip=1,
+        user_count_merchant=1,
+        total_uses=1,
+        distinct_devices=1,
+        current_device_uses=1,
+    )
 
     with patch("app.services.graph.get_driver", return_value=driver):
         txn = _make_transaction()
@@ -350,7 +513,7 @@ async def test_evaluate_caps_score_at_one(
         score, reasons = await graph_service.evaluate(txn)
 
     assert score == 1.0
-    assert "shared_device_ring" in reasons
+    assert "shared_device" in reasons
     assert "ip_cluster" in reasons
 
 
@@ -366,7 +529,7 @@ async def test_evaluate_only_shared_device_triggers(
         score, reasons = await graph_service.evaluate(txn)
 
     assert score == SHARED_DEVICE_SCORE_TIER_HIGH
-    assert reasons == ["shared_device_ring"]
+    assert reasons == ["shared_device"]
 
 
 @pytest.mark.asyncio

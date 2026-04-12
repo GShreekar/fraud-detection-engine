@@ -15,6 +15,25 @@ from app.services.graph import GraphService
 from app.services.rules import RulesService
 from app.services.velocity import VelocityService
 
+HIGH_CONFIDENCE_REASONS = {
+    "high_amount",
+    "high_risk_country",
+    "new_account",
+    "high_risk_merchant",
+}
+
+BEHAVIORAL_REASONS = {
+    "user_velocity",
+    "ip_velocity",
+    "device_velocity",
+    "country_change",
+    "amount_spike",
+    "shared_device",
+    "ip_cluster",
+    "merchant_fraud_ring",
+    "new_device_for_user",
+}
+
 
 class FraudEngine:
     def __init__(
@@ -65,6 +84,22 @@ class FraudEngine:
 
         # Merge all reasons from all services
         reasons: list[str] = rules_reasons + velocity_reasons + graph_reasons
+
+        # Calibration for stateful anomaly behavior:
+        # - Behavioral-only patterns are reviewed, not auto-blocked.
+        # - Country-change anomaly is at least REVIEW.
+        # - High-confidence rule + behavioral signal escalates to BLOCK threshold.
+        has_high_confidence = any(reason in HIGH_CONFIDENCE_REASONS for reason in reasons)
+        has_behavioral = any(reason in BEHAVIORAL_REASONS for reason in reasons)
+
+        if not has_high_confidence:
+            fraud_score = min(fraud_score, 0.74)
+
+        if "country_change" in reasons:
+            fraud_score = max(fraud_score, 0.4)
+
+        if has_high_confidence and has_behavioral:
+            fraud_score = max(fraud_score, 0.75)
 
         decision = self._decide(fraud_score)
 
