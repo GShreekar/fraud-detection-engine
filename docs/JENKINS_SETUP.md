@@ -41,6 +41,31 @@ This project currently assumes a Jenkins runtime that can:
 2. Run `python3`.
 3. Run `docker`.
 
+## 1.2 Verify Docker Socket Access
+
+The Jenkins user must be able to talk to the Docker daemon socket.
+
+Inside the Jenkins runtime, confirm the socket permissions and group:
+
+```bash
+ls -l /var/run/docker.sock
+id jenkins
+```
+
+If the Jenkins user is not in the Docker group, add it and restart Jenkins:
+
+```bash
+docker exec -u 0 jenkins sh -lc 'groupadd -f docker && usermod -aG docker jenkins'
+docker restart jenkins
+```
+
+After restart, verify again:
+
+```bash
+docker exec jenkins id
+docker exec jenkins docker ps
+```
+
 ## 2. Start Jenkins in Docker
 
 Run Jenkins as a container:
