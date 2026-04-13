@@ -24,12 +24,6 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
-        }
-
                 stage('Ensure Python Runtime') {
             steps {
                 sh '''
