@@ -2,7 +2,7 @@ pipeline {
     agent {
         docker {
             image 'python:3.13-slim'
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
+            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
 
@@ -40,6 +40,8 @@ pipeline {
                     apt-get update
                     apt-get install -y --no-install-recommends git docker.io
                     rm -rf /var/lib/apt/lists/*
+                    # Fix Docker socket access inside container
+                    chmod 666 /var/run/docker.sock
                 '''
             }
         }
