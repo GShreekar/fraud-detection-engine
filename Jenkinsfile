@@ -14,6 +14,7 @@ pipeline {
         REGISTRY = 'docker.io'
         REGISTRY_REPO = "${REGISTRY}/gshreekar/${IMAGE_NAME}"
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
+        DOCKER_AVAILABLE = 'false'
     }
 
     options {
@@ -86,7 +87,25 @@ pipeline {
             }
         }
 
+        stage('Check Docker Access') {
+            steps {
+                script {
+                    def dockerStatus = sh(script: 'docker info >/dev/null 2>&1', returnStatus: true)
+                    if (dockerStatus == 0) {
+                        env.DOCKER_AVAILABLE = 'true'
+                        echo 'Docker daemon is reachable. Image build/push stages will run.'
+                    } else {
+                        env.DOCKER_AVAILABLE = 'false'
+                        echo 'Docker daemon is not reachable from this Jenkins agent. Build/push stages will be skipped.'
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Image') {
+            when {
+                expression { env.DOCKER_AVAILABLE == 'true' }
+            }
             steps {
                 sh 'docker build -f docker/Dockerfile -t ${IMAGE_NAME}:${BUILD_NUMBER} .'
                 sh 'docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY_REPO}:${BUILD_NUMBER}'
@@ -94,9 +113,20 @@ pipeline {
             }
         }
 
+        stage('Docker Build Skipped Notice') {
+            when {
+                expression { env.DOCKER_AVAILABLE != 'true' }
+            }
+            steps {
+                echo 'Skipping Docker image stages because the Docker daemon socket is not accessible from this agent.'
+                echo 'To enable image build/push, grant Jenkins access to /var/run/docker.sock on the host.'
+            }
+        }
+
         stage('Push Docker Image (main only)') {
             when {
                 allOf {
+                    expression { env.DOCKER_AVAILABLE == 'true' }
                     branch 'main'
                     expression { return params.ENABLE_DOCKER_PUSH }
                 }
