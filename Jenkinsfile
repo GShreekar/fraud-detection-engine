@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'python:3.13-slim'
-            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-        }
-    }
+    agent any
 
     parameters {
         booleanParam(
@@ -34,14 +29,39 @@ pipeline {
             }
         }
 
-        stage('Setup Environment') {
+                stage('Ensure Python Runtime') {
             steps {
                 sh '''
-                    apt-get update
-                    apt-get install -y --no-install-recommends git docker.io
-                    rm -rf /var/lib/apt/lists/*
-                    # Fix Docker socket access inside container
-                    chmod 666 /var/run/docker.sock
+                                        set -e
+
+                                        if command -v python3 >/dev/null 2>&1; then
+                                            echo "python3 already available: $(python3 --version)"
+                                            exit 0
+                                        fi
+
+                                        echo "python3 not found. Attempting automatic installation..."
+
+                                        if command -v apt-get >/dev/null 2>&1; then
+                                            if [ "$(id -u)" -eq 0 ]; then
+                                                apt-get update
+                                                apt-get install -y --no-install-recommends python3 python3-venv python3-pip
+                                                rm -rf /var/lib/apt/lists/*
+                                            elif command -v sudo >/dev/null 2>&1; then
+                                                sudo apt-get update
+                                                sudo apt-get install -y --no-install-recommends python3 python3-venv python3-pip
+                                                sudo rm -rf /var/lib/apt/lists/*
+                                            else
+                                                echo "python3 is missing and this agent lacks privileges to install it."
+                                                echo "Run Jenkins agent with Python preinstalled, or grant sudo/root for apt-get."
+                                                exit 1
+                                            fi
+                                        else
+                                            echo "python3 is missing and apt-get is unavailable on this agent."
+                                            echo "Use a Debian/Ubuntu agent or preinstall Python on the Jenkins node."
+                                            exit 1
+                                        fi
+
+                                        python3 --version
                 '''
             }
         }
