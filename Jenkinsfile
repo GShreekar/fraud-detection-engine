@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'python:3.13-slim'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     parameters {
         booleanParam(
@@ -26,6 +31,16 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Setup Environment') {
+            steps {
+                sh '''
+                    apt-get update
+                    apt-get install -y --no-install-recommends git docker.io
+                    rm -rf /var/lib/apt/lists/*
+                '''
             }
         }
 
