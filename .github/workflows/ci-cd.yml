@@ -198,7 +198,7 @@ jobs:
             <keepDependencies>false</keepDependencies>
             <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
               <script></script>
-              <sandbox>false</sandbox>
+              <sandbox>true</sandbox>
             </definition>
             <triggers/>
             <disabled>false</disabled>
