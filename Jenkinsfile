@@ -75,9 +75,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -f docker/Dockerfile -t ${IMAGE_NAME}:${BUILD_NUMBER} .'
-                sh 'docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY_REPO}:${BUILD_NUMBER}'
-                sh 'docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY_REPO}:latest'
+                sh 'docker build -f docker/Dockerfile -t ${REGISTRY_REPO}:latest .'
             }
         }
 
@@ -94,7 +92,6 @@ pipeline {
                     )
                 ]) {
                     sh 'echo "$DOCKER_PASS" | docker login ${REGISTRY} -u "$DOCKER_USER" --password-stdin'
-                    sh 'docker push ${REGISTRY_REPO}:${BUILD_NUMBER}'
                     sh 'docker push ${REGISTRY_REPO}:latest'
                 }
             }
