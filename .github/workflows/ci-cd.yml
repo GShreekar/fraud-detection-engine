@@ -55,6 +55,7 @@ jobs:
           docker run -d \
             --name jenkins \
             --privileged \
+            --restart=always \
             -p 8080:8080 \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "${{ github.workspace }}:/workspace" \
@@ -113,10 +114,9 @@ jobs:
               install-plugin "$plugin" || true
           done
 
-          # Restart Jenkins to activate plugins
-          java -jar jenkins-cli.jar -s http://localhost:8080/ \
-            -auth admin:"$JENKINS_ADMIN_PASS" \
-            safe-restart || true
+          # Restart Jenkins container to activate plugins
+          # (safe-restart exits the JVM which stops the container — use docker restart instead)
+          docker restart jenkins
 
           # blueocean is large — Jenkins can take 3-4 min to come back; wait up to 5 min
           echo "Waiting for Jenkins to restart after plugin install (up to 5 min)..."
