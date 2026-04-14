@@ -64,10 +64,12 @@ jobs:
             jenkins/jenkins:lts
 
           # Install Docker + Python into Jenkins container (must run as root)
+          # Also fix workspace ownership so Jenkins can create @tmp sibling directories
           docker exec -u root jenkins bash -c '
             apt-get update && \
             apt-get install -y --no-install-recommends docker.io python3 python3-venv python3-pip && \
-            rm -rf /var/lib/apt/lists/*
+            rm -rf /var/lib/apt/lists/* && \
+            chown -R jenkins:jenkins /var/jenkins_home/workspace
           '
 
       # ── 3. Install ngrok (binary only, tunnel started later) ─────────
