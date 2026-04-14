@@ -18,13 +18,18 @@ jobs:
       # ── 2. Start Jenkins container ────────────────────────────────────
       - name: Start Jenkins container
         run: |
-          # Generate admin password and export to subsequent steps
+          # Generate admin password — printed first so it's visible in logs, then masked
           JENKINS_PASS=$(python3 -c "import secrets; print(secrets.token_hex(16))")
+          echo "============================================"
+          echo "  Jenkins admin password: ${JENKINS_PASS}"
+          echo "============================================"
           echo "::add-mask::${JENKINS_PASS}"
           echo "JENKINS_ADMIN_PASS=${JENKINS_PASS}" >> "$GITHUB_ENV"
 
-          # Create Groovy init script to provision admin user during Jenkins startup
+          # Groovy init scripts run automatically from /var/jenkins_home/init.groovy.d at startup
           mkdir -p /tmp/jenkins-init
+
+          # 01: Create admin user
           cat > /tmp/jenkins-init/01-create-admin.groovy << EOF
           import jenkins.model.*
           import hudson.security.*
@@ -37,6 +42,14 @@ jobs:
           strategy.setAllowAnonymousRead(false)
           instance.setAuthorizationStrategy(strategy)
           instance.save()
+          EOF
+
+          # 02: Set Jenkins URL (required for CLI to work without 403)
+          cat > /tmp/jenkins-init/02-set-url.groovy << 'EOF'
+          import jenkins.model.*
+          def config = JenkinsLocationConfiguration.get()
+          config.setUrl("http://localhost:8080/")
+          config.save()
           EOF
 
           docker run -d \
