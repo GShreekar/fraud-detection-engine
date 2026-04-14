@@ -10,7 +10,6 @@ pipeline {
         REGISTRY = 'docker.io'
         REGISTRY_REPO = "${REGISTRY}/gshreekar/${IMAGE_NAME}"
         DOCKER_CREDENTIALS_ID = 'dockerhub-credentials'
-        DOCKER_AVAILABLE = 'false'
     }
 
     options {
@@ -19,39 +18,37 @@ pipeline {
     }
 
     stages {
-                stage('Ensure Python Runtime') {
+        stage('Ensure Python Runtime') {
             steps {
                 sh '''
-                                        set -e
+                    set -e
 
-                                        if command -v python3 >/dev/null 2>&1; then
-                                            echo "python3 already available: $(python3 --version)"
-                                            exit 0
-                                        fi
+                    if command -v python3 >/dev/null 2>&1; then
+                        echo "python3 already available: $(python3 --version)"
+                        exit 0
+                    fi
 
-                                        echo "python3 not found. Attempting automatic installation..."
+                    echo "python3 not found. Attempting automatic installation..."
 
-                                        if command -v apt-get >/dev/null 2>&1; then
-                                            if [ "$(id -u)" -eq 0 ]; then
-                                                apt-get update
-                                                apt-get install -y --no-install-recommends python3 python3-venv python3-pip
-                                                rm -rf /var/lib/apt/lists/*
-                                            elif command -v sudo >/dev/null 2>&1; then
-                                                sudo apt-get update
-                                                sudo apt-get install -y --no-install-recommends python3 python3-venv python3-pip
-                                                sudo rm -rf /var/lib/apt/lists/*
-                                            else
-                                                echo "python3 is missing and this agent lacks privileges to install it."
-                                                echo "Run Jenkins agent with Python preinstalled, or grant sudo/root for apt-get."
-                                                exit 1
-                                            fi
-                                        else
-                                            echo "python3 is missing and apt-get is unavailable on this agent."
-                                            echo "Use a Debian/Ubuntu agent or preinstall Python on the Jenkins node."
-                                            exit 1
-                                        fi
+                    if command -v apt-get >/dev/null 2>&1; then
+                        if [ "$(id -u)" -eq 0 ]; then
+                            apt-get update
+                            apt-get install -y --no-install-recommends python3 python3-venv python3-pip
+                            rm -rf /var/lib/apt/lists/*
+                        elif command -v sudo >/dev/null 2>&1; then
+                            sudo apt-get update
+                            sudo apt-get install -y --no-install-recommends python3 python3-venv python3-pip
+                            sudo rm -rf /var/lib/apt/lists/*
+                        else
+                            echo "python3 is missing and this agent lacks privileges to install it."
+                            exit 1
+                        fi
+                    else
+                        echo "python3 is missing and apt-get is unavailable on this agent."
+                        exit 1
+                    fi
 
-                                        python3 --version
+                    python3 --version
                 '''
             }
         }
@@ -76,25 +73,7 @@ pipeline {
             }
         }
 
-        stage('Check Docker Access') {
-            steps {
-                script {
-                    def dockerStatus = sh(script: 'docker info >/dev/null 2>&1', returnStatus: true)
-                    if (dockerStatus == 0) {
-                        env.DOCKER_AVAILABLE = 'true'
-                        echo 'Docker daemon is reachable. Image build/push stages will run.'
-                    } else {
-                        env.DOCKER_AVAILABLE = 'false'
-                        echo 'Docker daemon is not reachable from this Jenkins agent. Build/push stages will be skipped.'
-                    }
-                }
-            }
-        }
-
         stage('Build Docker Image') {
-            when {
-                expression { env.DOCKER_AVAILABLE == 'true' }
-            }
             steps {
                 sh 'docker build -f docker/Dockerfile -t ${IMAGE_NAME}:${BUILD_NUMBER} .'
                 sh 'docker tag ${IMAGE_NAME}:${BUILD_NUMBER} ${REGISTRY_REPO}:${BUILD_NUMBER}'
@@ -102,22 +81,9 @@ pipeline {
             }
         }
 
-        stage('Docker Build Skipped Notice') {
+        stage('Push Docker Image') {
             when {
-                expression { env.DOCKER_AVAILABLE != 'true' }
-            }
-            steps {
-                echo 'Skipping Docker image stages because the Docker daemon socket is not accessible from this agent.'
-                echo 'To enable image build/push, grant Jenkins access to /var/run/docker.sock on the host.'
-            }
-        }
-
-        stage('Push Docker Image (main only)') {
-            when {
-                allOf {
-                    expression { env.DOCKER_AVAILABLE == 'true' }
-                    branch 'main'
-                }
+                expression { env.GIT_BRANCH == 'origin/main' || env.GIT_BRANCH == 'main' }
             }
             steps {
                 withCredentials([
@@ -128,6 +94,7 @@ pipeline {
                     )
                 ]) {
                     sh 'echo "$DOCKER_PASS" | docker login ${REGISTRY} -u "$DOCKER_USER" --password-stdin'
+                    sh 'docker push ${REGISTRY_REPO}:${BUILD_NUMBER}'
                     sh 'docker push ${REGISTRY_REPO}:latest'
                 }
             }
