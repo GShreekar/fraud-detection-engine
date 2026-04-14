@@ -69,32 +69,19 @@ jobs:
             rm -rf /var/lib/apt/lists/*
           '
 
-      # ── 3. Install & start ngrok tunnel ───────────────────────────────
-      - name: Setup ngrok tunnel
+      # ── 3. Install ngrok (binary only, tunnel started later) ─────────
+      - name: Install ngrok
         env:
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
         run: |
-          # Install ngrok via official apt repository
           curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
             | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
           echo "deb https://ngrok-agent.s3.amazonaws.com buster main" \
             | sudo tee /etc/apt/sources.list.d/ngrok.list
           sudo apt-get update -qq && sudo apt-get install -y ngrok
           ngrok config add-authtoken "$NGROK_AUTHTOKEN"
-          nohup ngrok http 8080 --log=stdout > /tmp/ngrok.log 2>&1 &
-          sleep 5
 
-      # ── 4. Print Jenkins UI URL ──────────────────────────────────────
-      - name: Print Jenkins UI URL
-        run: |
-          NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels \
-            | python3 -c "import sys,json; print(json.load(sys.stdin)['tunnels'][0]['public_url'])")
-          echo "============================================"
-          echo "  Jenkins UI: ${NGROK_URL}"
-          echo "============================================"
-          echo "NGROK_URL=${NGROK_URL}" >> "$GITHUB_ENV"
-
-      # ── 5. Wait for Jenkins to be ready ───────────────────────────────
+      # ── 4. Wait for Jenkins to be ready ───────────────────────────────
       - name: Wait for Jenkins to be ready
         run: |
           echo "Waiting for Jenkins to start..."
@@ -110,16 +97,12 @@ jobs:
           docker logs jenkins
           exit 1
 
-      # ── 6. Confirm admin credentials ready ───────────────────────────
-      - name: Confirm Jenkins admin credentials
-        run: echo "Jenkins admin credentials pre-configured via Groovy init script."
-
-      # ── 7. Download Jenkins CLI ───────────────────────────────────────
+      # ── 5. Download Jenkins CLI ───────────────────────────────────────
       - name: Download Jenkins CLI
         run: |
           curl -sSL -o jenkins-cli.jar http://localhost:8080/jnlpJars/jenkins-cli.jar
 
-      # ── 8. Install required Jenkins plugins ───────────────────────────
+      # ── 6. Install required Jenkins plugins ───────────────────────────
       - name: Install Jenkins plugins
         run: |
           PLUGINS="workflow-aggregator git docker-workflow credentials-binding blueocean pipeline-stage-view junit"
@@ -135,19 +118,35 @@ jobs:
             -auth admin:"$JENKINS_ADMIN_PASS" \
             safe-restart || true
 
-          echo "Waiting for Jenkins to restart after plugin install..."
-          sleep 15
-          for i in $(seq 1 36); do
+          # blueocean is large — Jenkins can take 3-4 min to come back; wait up to 5 min
+          echo "Waiting for Jenkins to restart after plugin install (up to 5 min)..."
+          sleep 30
+          for i in $(seq 1 60); do
             if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
               echo "Jenkins restarted successfully."
               exit 0
             fi
+            echo "  Waiting... attempt $i/60"
             sleep 5
           done
-          echo "Jenkins failed to restart"
+          echo "Jenkins failed to restart within 5 minutes"
+          docker logs --tail 50 jenkins
           exit 1
 
-      # ── 9. Create DockerHub credentials in Jenkins ────────────────────
+      # ── 7. Start ngrok tunnel (Jenkins fully up with plugins now) ─────
+      - name: Start ngrok tunnel and print Jenkins UI URL
+        run: |
+          nohup ngrok http 8080 --log=stdout > /tmp/ngrok.log 2>&1 &
+          sleep 5
+          NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['tunnels'][0]['public_url'])")
+          echo "============================================"
+          echo "  Jenkins UI: ${NGROK_URL}"
+          echo "  Username:   admin"
+          echo "============================================"
+          echo "NGROK_URL=${NGROK_URL}" >> "$GITHUB_ENV"
+
+      # ── 8. Create DockerHub credentials in Jenkins ────────────────────
       - name: Inject DockerHub credentials into Jenkins
         env:
           DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
