@@ -1,0 +1,220 @@
+name: CI/CD – Jenkins Pipeline → DockerHub
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  jenkins-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Checkout code ──────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Start Jenkins container ────────────────────────────────────
+      - name: Start Jenkins container
+        run: |
+          docker run -d \
+            --name jenkins \
+            --privileged \
+            -p 8080:8080 \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${{ github.workspace }}:/workspace" \
+            -e JAVA_OPTS="-Djenkins.install.runSetupWizard=false" \
+            jenkins/jenkins:lts
+
+          # Give Jenkins container access to Docker socket
+          docker exec jenkins bash -c '
+            apt-get update && \
+            apt-get install -y --no-install-recommends docker.io python3 python3-venv python3-pip && \
+            rm -rf /var/lib/apt/lists/*
+          '
+
+      # ── 3. Install & start ngrok tunnel ───────────────────────────────
+      - name: Setup ngrok tunnel
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+        run: |
+          curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok-v3-stable-linux-amd64.tgz \
+            | tar xz -C /usr/local/bin
+          ngrok config add-authtoken "$NGROK_AUTHTOKEN"
+          nohup ngrok http 8080 --log=stdout > /tmp/ngrok.log 2>&1 &
+          sleep 5
+
+      # ── 4. Print Jenkins UI URL ──────────────────────────────────────
+      - name: Print Jenkins UI URL
+        run: |
+          NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['tunnels'][0]['public_url'])")
+          echo "============================================"
+          echo "  Jenkins UI: ${NGROK_URL}"
+          echo "============================================"
+          echo "NGROK_URL=${NGROK_URL}" >> "$GITHUB_ENV"
+
+      # ── 5. Wait for Jenkins to be ready ───────────────────────────────
+      - name: Wait for Jenkins to be ready
+        run: |
+          echo "Waiting for Jenkins to start..."
+          for i in $(seq 1 36); do
+            if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
+              echo "Jenkins is ready!"
+              exit 0
+            fi
+            echo "  Attempt $i/36 – not ready yet, retrying in 5s..."
+            sleep 5
+          done
+          echo "Jenkins failed to start within 3 minutes"
+          docker logs jenkins
+          exit 1
+
+      # ── 6. Get admin password ─────────────────────────────────────────
+      - name: Get Jenkins admin password
+        run: |
+          ADMIN_PASS=$(docker exec jenkins cat /var/jenkins_home/secrets/initialAdminPassword)
+          echo "::add-mask::${ADMIN_PASS}"
+          echo "JENKINS_ADMIN_PASS=${ADMIN_PASS}" >> "$GITHUB_ENV"
+          echo "Jenkins admin password retrieved."
+
+      # ── 7. Download Jenkins CLI ───────────────────────────────────────
+      - name: Download Jenkins CLI
+        run: |
+          curl -sSL -o jenkins-cli.jar http://localhost:8080/jnlpJars/jenkins-cli.jar
+
+      # ── 8. Install required Jenkins plugins ───────────────────────────
+      - name: Install Jenkins plugins
+        run: |
+          PLUGINS="workflow-aggregator git docker-workflow credentials-binding blueocean pipeline-stage-view junit"
+          for plugin in $PLUGINS; do
+            echo "Installing plugin: $plugin"
+            java -jar jenkins-cli.jar -s http://localhost:8080/ \
+              -auth admin:"$JENKINS_ADMIN_PASS" \
+              install-plugin "$plugin" || true
+          done
+
+          # Restart Jenkins to activate plugins
+          java -jar jenkins-cli.jar -s http://localhost:8080/ \
+            -auth admin:"$JENKINS_ADMIN_PASS" \
+            safe-restart || true
+
+          echo "Waiting for Jenkins to restart after plugin install..."
+          sleep 15
+          for i in $(seq 1 36); do
+            if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
+              echo "Jenkins restarted successfully."
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Jenkins failed to restart"
+          exit 1
+
+      # ── 9. Create DockerHub credentials in Jenkins ────────────────────
+      - name: Inject DockerHub credentials into Jenkins
+        env:
+          DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_HUB_PAT: ${{ secrets.DOCKER_HUB_PAT }}
+        run: |
+          # Build Groovy script with Python to safely inject credentials
+          python3 -c "
+          import os
+          username = os.environ['DOCKER_HUB_USERNAME']
+          pat = os.environ['DOCKER_HUB_PAT']
+          # Escape single quotes for Groovy string literals
+          username = username.replace(\"'\", \"\\\\'\")
+          pat = pat.replace(\"'\", \"\\\\'\")
+          script = '''import jenkins.model.*
+          import com.cloudbees.plugins.credentials.*
+          import com.cloudbees.plugins.credentials.domains.*
+          import com.cloudbees.plugins.credentials.impl.*
+
+          def store = Jenkins.instance.getExtensionList(
+            \"com.cloudbees.plugins.credentials.SystemCredentialsProvider\"
+          )[0].getStore()
+
+          def credentials = new UsernamePasswordCredentialsImpl(
+            CredentialsScope.GLOBAL,
+            \"dockerhub-credentials\",
+            \"DockerHub credentials injected by GitHub Actions\",
+            \"''' + username + '''\",
+            \"''' + pat + '''\"
+          )
+
+          store.addCredentials(Domain.global(), credentials)
+          println \"DockerHub credentials created successfully.\"
+          '''
+          with open('/tmp/create-creds.groovy', 'w') as f:
+              f.write(script)
+          "
+
+          java -jar jenkins-cli.jar -s http://localhost:8080/ \
+            -auth admin:"$JENKINS_ADMIN_PASS" \
+            groovy = < /tmp/create-creds.groovy
+
+      # ── 10. Create pipeline job from Jenkinsfile ──────────────────────
+      - name: Create Jenkins pipeline job
+        run: |
+          cat <<'JOB_XML' > /tmp/job.xml
+          <?xml version='1.1' encoding='UTF-8'?>
+          <flow-definition plugin="workflow-job">
+            <description>Fraud Detection Engine CI/CD</description>
+            <keepDependencies>false</keepDependencies>
+            <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
+              <script></script>
+              <sandbox>false</sandbox>
+            </definition>
+            <triggers/>
+            <disabled>false</disabled>
+          </flow-definition>
+          JOB_XML
+
+          # Read Jenkinsfile and escape XML special characters, then inject into job config
+          JENKINSFILE_CONTENT=$(cat "${{ github.workspace }}/Jenkinsfile" \
+            | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g')
+
+          python3 -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('/tmp/job.xml')
+          script_el = tree.find('.//script')
+          with open('${{ github.workspace }}/Jenkinsfile', 'r') as f:
+              script_el.text = f.read()
+          tree.write('/tmp/job.xml', encoding='unicode', xml_declaration=True)
+          "
+
+          java -jar jenkins-cli.jar -s http://localhost:8080/ \
+            -auth admin:"$JENKINS_ADMIN_PASS" \
+            create-job fraud-detection-engine < /tmp/job.xml
+
+          echo "Pipeline job 'fraud-detection-engine' created."
+
+      # ── 11. Trigger the pipeline and stream output ────────────────────
+      - name: Trigger Jenkins pipeline and wait for result
+        run: |
+          echo "Triggering Jenkins build..."
+          java -jar jenkins-cli.jar -s http://localhost:8080/ \
+            -auth admin:"$JENKINS_ADMIN_PASS" \
+            build fraud-detection-engine -s -v
+
+          BUILD_RESULT=$?
+          if [ $BUILD_RESULT -eq 0 ]; then
+            echo "============================================"
+            echo "  Jenkins pipeline PASSED"
+            echo "============================================"
+          else
+            echo "============================================"
+            echo "  Jenkins pipeline FAILED (exit code: $BUILD_RESULT)"
+            echo "============================================"
+            exit 1
+          fi
+
+      # ── 12. Print summary ─────────────────────────────────────────────
+      - name: Summary
+        if: always()
+        run: |
+          echo "============================================"
+          echo "  Jenkins UI was at: ${NGROK_URL:-N/A}"
+          echo "  Docker image: docker.io/${{ secrets.DOCKER_HUB_USERNAME }}/fraud-detection-engine:latest"
+          echo "============================================"

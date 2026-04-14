@@ -1,14 +1,6 @@
 pipeline {
     agent any
 
-    parameters {
-        booleanParam(
-            name: 'ENABLE_DOCKER_PUSH',
-            defaultValue: false,
-            description: 'Push Docker image to registry (main branch only)'
-        )
-    }
-
     environment {
         IMAGE_NAME = 'fraud-detection-engine'
         REGISTRY = 'docker.io'
@@ -122,7 +114,6 @@ pipeline {
                 allOf {
                     expression { env.DOCKER_AVAILABLE == 'true' }
                     branch 'main'
-                    expression { return params.ENABLE_DOCKER_PUSH }
                 }
             }
             steps {
