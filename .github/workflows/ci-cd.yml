@@ -27,8 +27,8 @@ jobs:
             -e JAVA_OPTS="-Djenkins.install.runSetupWizard=false" \
             jenkins/jenkins:lts
 
-          # Give Jenkins container access to Docker socket
-          docker exec jenkins bash -c '
+          # Give Jenkins container access to Docker socket (must run as root)
+          docker exec -u root jenkins bash -c '
             apt-get update && \
             apt-get install -y --no-install-recommends docker.io python3 python3-venv python3-pip && \
             rm -rf /var/lib/apt/lists/*
