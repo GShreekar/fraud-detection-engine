@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    triggers {
+        pollSCM('H/1 * * * *')  // Poll GitHub every ~1 minute for changes
+    }
+
     environment {
         IMAGE_NAME = 'fraud-detection-engine'
         REGISTRY = 'docker.io'

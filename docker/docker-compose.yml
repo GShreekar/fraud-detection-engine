@@ -1,4 +1,17 @@
 services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    privileged: true
+    user: root
+    ports:
+      - "8080:8080"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=true"
+    restart: unless-stopped
+
   api:
     build:
       context: ..
@@ -58,5 +71,6 @@ services:
       retries: 5
 
 volumes:
+  jenkins_data:
   redis_data:
   neo4j_data:
