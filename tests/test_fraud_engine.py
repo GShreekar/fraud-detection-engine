@@ -12,9 +12,9 @@ from app.services.fraud_engine import FraudEngine
 # ── _decide() boundary tests ──────────────────────────────────────
 
 
-# def test_decide_returns_allow_for_zero_score() -> None:
-#     """A score of 0.0 should produce ALLOW."""
-#     assert FraudEngine._decide(0.0) == FraudDecision.ALLOW
+def test_decide_returns_allow_for_zero_score() -> None:
+    """A score of 0.0 should produce ALLOW."""
+    assert FraudEngine._decide(0.0) == FraudDecision.ALLOW
 
 
 def test_decide_returns_allow_below_review_threshold() -> None:
