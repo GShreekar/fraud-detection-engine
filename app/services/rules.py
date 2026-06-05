@@ -22,7 +22,7 @@ INTERNATIONAL_TRANSACTION_SCORE = 0.15
 UNUSUAL_HOUR_SCORE = 0.15
 
 # --- Round amount detection ---
-ROUND_AMOUNT_MODULO = 100.0
+ROUND_AMOUNT_MODULO = 200.0
 
 # --- Unusual hour boundaries (UTC) ---
 UNUSUAL_HOUR_START = 0
